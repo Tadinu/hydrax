@@ -55,15 +55,15 @@ class SamplingBasedController(ABC):
     """An abstract sampling-based MPC algorithm interface."""
 
     def __init__(
-        self,
-        task: Task,
-        num_randomizations: int,
-        risk_strategy: RiskStrategy,
-        seed: int,
-        plan_horizon: float,
-        spline_type: Literal["zero", "linear", "cubic"] = "zero",
-        num_knots: int = 4,
-        iterations: int = 1,
+            self,
+            task: Task,
+            num_randomizations: int,
+            risk_strategy: RiskStrategy,
+            seed: int,
+            plan_horizon: float,
+            spline_type: Literal["zero", "linear", "cubic"] = "zero",
+            num_knots: int = 4,
+            iterations: int = 1,
     ) -> None:
         """Initialize the MPC controller.
 
@@ -87,7 +87,7 @@ class SamplingBasedController(ABC):
         self.risk_strategy = risk_strategy
 
         # time-related variables
-        # NOTE: we always interpret self.task.model as the controller's
+        # NOTE: we always interpret self.task.mjx_model as the controller's
         # internal model, not the model used for simulation. dt is the
         # time between spline queries.
         self.plan_horizon = plan_horizon
@@ -100,7 +100,7 @@ class SamplingBasedController(ABC):
         self.interp_func = get_interp_func(spline_type)
 
         # Use a single model (no domain randomization) by default
-        self.model = task.model
+        self.mjx_model = task.mjx_model
         self.randomized_axes = None
 
         # Number of optimization iterations
@@ -115,10 +115,9 @@ class SamplingBasedController(ABC):
             rng, subrng = jax.random.split(rng)
             subrngs = jax.random.split(subrng, num_randomizations)
             randomizations = jax.vmap(self.task.domain_randomize_model)(subrngs)
-            self.model = self.task.model.tree_replace(randomizations)
-
+            self.mjx_model = self.task.mjx_model.tree_replace(randomizations)
             # Keep track of which elements of the model have randomization
-            self.randomized_axes = jax.tree.map(lambda x: None, self.task.model)
+            self.randomized_axes = jax.tree.map(lambda x: None, self.task.mjx_model)
             self.randomized_axes = self.randomized_axes.tree_replace(
                 {key: 0 for key in randomizations.keys()}
             )
@@ -138,7 +137,7 @@ class SamplingBasedController(ABC):
         # the mean knots by evaluating the old spline at those times
         tk = params.tk
         new_tk = (
-            jnp.linspace(0.0, self.plan_horizon, self.num_knots) + state.time
+                jnp.linspace(0.0, self.plan_horizon, self.num_knots) + state.time
         )
         new_mean = self.interp_func(new_tk, tk, params.mean[None, ...])[0]
         params = params.replace(tk=new_tk, mean=new_mean)
@@ -172,11 +171,11 @@ class SamplingBasedController(ABC):
         return params, rollouts_final
 
     def rollout_with_randomizations(
-        self,
-        state: mjx.Data,
-        tk: jax.Array,
-        knots: jax.Array,
-        rng: jax.Array,
+            self,
+            state: mjx.Data,
+            tk: jax.Array,
+            knots: jax.Array,
+            rng: jax.Array,
     ) -> Trajectory:
         """Compute rollout costs, applying domain randomizations.
 
@@ -211,7 +210,7 @@ class SamplingBasedController(ABC):
         # domain randomizations.
         _, rollouts = jax.vmap(
             self.eval_rollouts, in_axes=(self.randomized_axes, 0, None, None)
-        )(self.model, states, controls, knots)
+        )(self.mjx_model, states, controls, knots)
 
         # Combine the costs from different domain randomizations using the
         # specified risk strategy.
@@ -225,11 +224,11 @@ class SamplingBasedController(ABC):
 
     @partial(jax.vmap, in_axes=(None, None, None, 0, 0))
     def eval_rollouts(
-        self,
-        model: mjx.Model,
-        state: mjx.Data,
-        controls: jax.Array,
-        knots: jax.Array,
+            self,
+            model: mjx.Model,
+            state: mjx.Data,
+            controls: jax.Array,
+            knots: jax.Array,
     ) -> Tuple[mjx.Data, Trajectory]:
         """Rollout control sequences (in parallel) and compute the costs.
 
@@ -245,7 +244,7 @@ class SamplingBasedController(ABC):
         """
 
         def _scan_fn(
-            x: mjx.Data, u: jax.Array
+                x: mjx.Data, u: jax.Array
         ) -> Tuple[mjx.Data, Tuple[mjx.Data, jax.Array, jax.Array]]:
             """Compute the cost and observation, then advance the state."""
             x = x.replace(ctrl=u)
@@ -271,7 +270,7 @@ class SamplingBasedController(ABC):
         )
 
     def init_params(
-        self, initial_knots: jax.Array = None, seed: int = 0
+            self, initial_knots: jax.Array = None, seed: int = 0
     ) -> Any:
         """Initialize the policy parameters, U = [u₀, u₁, ... ] ~ π(params).
 
@@ -286,9 +285,9 @@ class SamplingBasedController(ABC):
         mean = (
             initial_knots
             if initial_knots is not None
-            else jnp.zeros((self.num_knots, self.task.model.nu))
+            else jnp.zeros((self.num_knots, self.task.mjx_model.nu))
         )
-        assert mean.shape == (self.num_knots, self.task.model.nu), (
+        assert mean.shape == (self.num_knots, self.task.mjx_model.nu), (
             f"Initial knots must have shape (num_knots, nu), got {mean.shape}"
         )
         tk = jnp.linspace(0.0, self.plan_horizon, self.num_knots)

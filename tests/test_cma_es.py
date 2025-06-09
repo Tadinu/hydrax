@@ -34,8 +34,8 @@ def test_cmaes() -> None:
     controls = ctrl.interp_func(tq, tk, knots)
 
     # Roll out the control sequences
-    state = mjx.make_data(task.model)
-    _, rollouts = ctrl.eval_rollouts(task.model, state, controls, knots)
+    state = mjx.make_data(task.mjx_model)
+    _, rollouts = ctrl.eval_rollouts(task.mjx_model, state, controls, knots)
     assert rollouts.costs.shape == (32, ctrl.ctrl_steps + 1)
 
     # Update the policy parameters
@@ -64,7 +64,7 @@ def test_open_loop() -> None:
     jit_opt = jax.jit(opt.optimize)
 
     # Initialize the system state and policy parameters
-    state = mjx.make_data(task.model)
+    state = mjx.make_data(task.mjx_model)
     params = opt.init_params()
 
     for _ in range(100):
@@ -83,7 +83,7 @@ def test_open_loop() -> None:
     tq = jnp.linspace(0.0, opt.plan_horizon - opt.dt, opt.ctrl_steps)
     controls = opt.interp_func(tq, tk, best_knots)
     states, final_rollout = jax.jit(opt.eval_rollouts)(
-        task.model, state, controls, best_knots
+        task.mjx_model, state, controls, best_knots
     )
 
     if __name__ == "__main__":

@@ -1,6 +1,6 @@
 import argparse
 
-import mujoco
+import mujoco as mj
 
 from hydrax.algs import MPPI
 from hydrax.simulation.asynchronous import run_interactive as run_async
@@ -45,10 +45,10 @@ if __name__ == "__main__":
     mj_model = task.mj_model
     mj_model.opt.timestep = 0.01
     mj_model.opt.o_solimp = [0.9, 0.95, 0.001, 0.5, 2]
-    mj_model.opt.enableflags = mujoco.mjtEnableBit.mjENBL_OVERRIDE
+    mj_model.opt.enableflags = mj.mjtEnableBit.mjENBL_OVERRIDE
 
     # Set the initial state so the robot falls and needs to stand back up
-    mj_data = mujoco.MjData(mj_model)
+    mj_data = mj.MjData(mj_model)
     mj_data.qpos[:] = mj_model.keyframe("stand").qpos
     mj_data.qpos[3:7] = [0.7, 0.0, -0.7, 0.0]
 
@@ -61,7 +61,7 @@ if __name__ == "__main__":
         mj_model.opt.timestep = 0.005
         mj_model.opt.iterations = 100
         mj_model.opt.ls_iterations = 50
-        mj_model.opt.cone = mujoco.mjtCone.mjCONE_ELLIPTIC
+        mj_model.opt.cone = mj.mjtCone.mjCONE_ELLIPTIC
 
         run_async(
             ctrl,

@@ -9,9 +9,9 @@ def test_double_cart_pole() -> None:
     task = DoubleCartPole()
     assert isinstance(task, DoubleCartPole)
 
-    state = mjx.make_data(task.model)
+    state = mjx.make_data(task.mjx_model)
     state = state.replace(qpos=jnp.array([0.0, 0.1, 0.1]))  # x, θ₁, θ₂
-    state = mjx.forward(task.model, state)
+    state = mjx.forward(task.mjx_model, state)
     tip_pos = state.site_xpos[task.tip_id]
     assert tip_pos[0] != 0.0  # x position
     assert tip_pos[1] == 0.0  # y position

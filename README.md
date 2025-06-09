@@ -120,7 +120,7 @@ class MyNewTask(Task):
 ```
 
 
-The dynamics ($f$) are specified by a `mujoco.MjModel` that is passed to the
+The dynamics ($f$) are specified by a `mj.MjModel` that is passed to the
 constructor. Other constructor arguments specify the planning horizon $T$ and
 other details.
 
@@ -194,16 +194,16 @@ class MyDomainRandomizedTask(Task):
 
     def domain_randomize_model(self, rng: jax.Array) -> Dict[str, jax.Array]:
         """Randomize the friction coefficients."""
-        n_geoms = self.model.geom_friction.shape[0]
+        n_geoms = self.mjx_model.geom_friction.shape[0]
         multiplier = jax.random.uniform(rng, (n_geoms,), minval=0.5, maxval=2.0)
-        new_frictions = self.model.geom_friction.at[:, 0].set(
-            self.model.geom_friction[:, 0] * multiplier
+        new_frictions = self.mjx_model.geom_friction.at[:, 0].set(
+            self.mjx_model.geom_friction[:, 0] * multiplier
         )
         return {"geom_friction": new_frictions}
 
     def domain_randomize_data(self, data: mjx.Data, rng: jax.Array) -> Dict[str, jax.Array]:
         """Randomly shift the measured configurations."""
-        shift = 0.005 * jax.random.normal(rng, (self.model.nq,))
+        shift = 0.005 * jax.random.normal(rng, (self.mjx_model.nq,))
         return {"qpos": data.qpos + shift}
 ```
 These methods return a dictionary of randomized parameters, given a particular

@@ -1,6 +1,6 @@
 import jax
 import jax.numpy as jnp
-import mujoco
+import mujoco as mj
 from mujoco import mjx
 
 from hydrax import ROOT
@@ -12,7 +12,7 @@ class Pendulum(Task):
 
     def __init__(self) -> None:
         """Load the MuJoCo model and set task parameters."""
-        mj_model = mujoco.MjModel.from_xml_path(
+        mj_model = mj.MjModel.from_xml_path(
             ROOT + "/models/pendulum/scene.xml"
         )
         super().__init__(mj_model, trace_sites=["tip"])

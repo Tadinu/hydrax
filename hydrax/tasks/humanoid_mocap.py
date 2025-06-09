@@ -2,7 +2,7 @@ from typing import Dict
 
 import jax
 import jax.numpy as jnp
-import mujoco
+import mujoco as mj
 import numpy as np
 from huggingface_hub import hf_hub_download
 from mujoco import mjx
@@ -20,15 +20,15 @@ class HumanoidMocap(Task):
     """
 
     def __init__(
-        self,
-        reference_filename: str = "Lafan1/mocap/UnitreeG1/walk1_subject1.npz",
+            self,
+            reference_filename: str = "Lafan1/mocap/UnitreeG1/walk1_subject1.npz",
     ) -> None:
         """Load the MuJoCo model and set task parameters.
 
         The list of available reference files can be found at
         https://huggingface.co/datasets/robfiras/loco-mujoco-datasets/tree/main.
         """
-        mj_model = mujoco.MjModel.from_xml_path(
+        mj_model = mj.MjModel.from_xml_path(
             ROOT + "/models/g1/scene_23dof.xml"
         )
         super().__init__(
@@ -37,17 +37,17 @@ class HumanoidMocap(Task):
         )
 
         # Get sensor IDs
-        self.left_foot_pos_sensor = mujoco.mj_name2id(
-            mj_model, mujoco.mjtObj.mjOBJ_SENSOR, "left_foot_position"
+        self.left_foot_pos_sensor = mj.mj_name2id(
+            mj_model, mj.mjtObj.mjOBJ_SENSOR, "left_foot_position"
         )
-        self.left_foot_quat_sensor = mujoco.mj_name2id(
-            mj_model, mujoco.mjtObj.mjOBJ_SENSOR, "left_foot_orientation"
+        self.left_foot_quat_sensor = mj.mj_name2id(
+            mj_model, mj.mjtObj.mjOBJ_SENSOR, "left_foot_orientation"
         )
-        self.right_foot_pos_sensor = mujoco.mj_name2id(
-            mj_model, mujoco.mjtObj.mjOBJ_SENSOR, "right_foot_position"
+        self.right_foot_pos_sensor = mj.mj_name2id(
+            mj_model, mj.mjtObj.mjOBJ_SENSOR, "right_foot_position"
         )
-        self.right_foot_quat_sensor = mujoco.mj_name2id(
-            mj_model, mujoco.mjtObj.mjOBJ_SENSOR, "right_foot_orientation"
+        self.right_foot_quat_sensor = mj.mj_name2id(
+            mj_model, mj.mjtObj.mjOBJ_SENSOR, "right_foot_orientation"
         )
 
         # Download and load reference data
@@ -64,7 +64,7 @@ class HumanoidMocap(Task):
         self.reference_fps = npz_file["frequency"]
 
         # Precompute reference foot positions and orientations
-        mj_data = mujoco.MjData(mj_model)
+        mj_data = mj.MjData(mj_model)
         n_frames = len(reference)
         ref_left_pos = np.zeros((n_frames, 3))
         ref_left_quat = np.zeros((n_frames, 4))
@@ -72,14 +72,14 @@ class HumanoidMocap(Task):
         ref_right_quat = np.zeros((n_frames, 4))
         for i in range(n_frames):
             mj_data.qpos[:] = reference[i]
-            mujoco.mj_forward(mj_model, mj_data)
+            mj.mj_forward(mj_model, mj_data)
             ref_left_pos[i] = mj_data.site_xpos[mj_model.site("left_foot").id]
             ref_right_pos[i] = mj_data.site_xpos[mj_model.site("right_foot").id]
-            mujoco.mju_mat2Quat(
+            mj.mju_mat2Quat(
                 ref_left_quat[i],
                 mj_data.site_xmat[mj_model.site("left_foot").id].flatten(),
             )
-            mujoco.mju_mat2Quat(
+            mj.mju_mat2Quat(
                 ref_right_quat[i],
                 mj_data.site_xmat[mj_model.site("right_foot").id].flatten(),
             )
@@ -113,38 +113,38 @@ class HumanoidMocap(Task):
         )
 
     def _get_foot_position_errors(
-        self, state: mjx.Data
+            self, state: mjx.Data
     ) -> tuple[jax.Array, jax.Array]:
         """Get position errors for both feet."""
         ref_left_pos, _, ref_right_pos, _ = self._get_reference_foot_data(
             state.time
         )
 
-        left_pos_adr = self.model.sensor_adr[self.left_foot_pos_sensor]
-        right_pos_adr = self.model.sensor_adr[self.right_foot_pos_sensor]
+        left_pos_adr = self.mjx_model.sensor_adr[self.left_foot_pos_sensor]
+        right_pos_adr = self.mjx_model.sensor_adr[self.right_foot_pos_sensor]
 
         left_err = (
-            state.sensordata[left_pos_adr : left_pos_adr + 3] - ref_left_pos
+                state.sensordata[left_pos_adr: left_pos_adr + 3] - ref_left_pos
         )
         right_err = (
-            state.sensordata[right_pos_adr : right_pos_adr + 3] - ref_right_pos
+                state.sensordata[right_pos_adr: right_pos_adr + 3] - ref_right_pos
         )
 
         return left_err, right_err
 
     def _get_foot_orientation_errors(
-        self, state: mjx.Data
+            self, state: mjx.Data
     ) -> tuple[jax.Array, jax.Array]:
         """Get orientation errors for both feet."""
         _, ref_left_quat, _, ref_right_quat = self._get_reference_foot_data(
             state.time
         )
 
-        left_quat_adr = self.model.sensor_adr[self.left_foot_quat_sensor]
-        right_quat_adr = self.model.sensor_adr[self.right_foot_quat_sensor]
+        left_quat_adr = self.mjx_model.sensor_adr[self.left_foot_quat_sensor]
+        right_quat_adr = self.mjx_model.sensor_adr[self.right_foot_quat_sensor]
 
-        left_quat = state.sensordata[left_quat_adr : left_quat_adr + 4]
-        right_quat = state.sensordata[right_quat_adr : right_quat_adr + 4]
+        left_quat = state.sensordata[left_quat_adr: left_quat_adr + 4]
+        right_quat = state.sensordata[right_quat_adr: right_quat_adr + 4]
 
         left_err = quat_sub(left_quat, ref_left_quat)
         right_err = quat_sub(right_quat, ref_right_quat)
@@ -175,10 +175,10 @@ class HumanoidMocap(Task):
         control_cost = jnp.sum(jnp.square(control - u_ref))
 
         return (
-            1.0 * configuration_cost
-            + 5.0 * foot_position_cost
-            + 0.1 * foot_orientation_cost
-            + 1.0 * control_cost
+                1.0 * configuration_cost
+                + 5.0 * foot_position_cost
+                + 0.1 * foot_orientation_cost
+                + 1.0 * control_cost
         )
 
     def terminal_cost(self, state: mjx.Data) -> jax.Array:
@@ -200,22 +200,22 @@ class HumanoidMocap(Task):
         )
 
         return self.dt * (
-            1.0 * configuration_cost
-            + 1.0 * foot_position_cost
-            + 0.1 * foot_orientation_cost
+                1.0 * configuration_cost
+                + 1.0 * foot_position_cost
+                + 0.1 * foot_orientation_cost
         )
 
     def domain_randomize_model(self, rng: jax.Array) -> Dict[str, jax.Array]:
         """Randomize the friction parameters."""
-        n_geoms = self.model.geom_friction.shape[0]
+        n_geoms = self.mjx_model.geom_friction.shape[0]
         multiplier = jax.random.uniform(rng, (n_geoms,), minval=0.5, maxval=2.0)
-        new_frictions = self.model.geom_friction.at[:, 0].set(
-            self.model.geom_friction[:, 0] * multiplier
+        new_frictions = self.mjx_model.geom_friction.at[:, 0].set(
+            self.mjx_model.geom_friction[:, 0] * multiplier
         )
         return {"geom_friction": new_frictions}
 
     def domain_randomize_data(
-        self, data: mjx.Data, rng: jax.Array
+            self, data: mjx.Data, rng: jax.Array
     ) -> Dict[str, jax.Array]:
         """Randomly perturb the measured base position and velocities."""
         rng, q_rng, v_rng = jax.random.split(rng, 3)

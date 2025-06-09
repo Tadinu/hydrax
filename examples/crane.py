@@ -1,4 +1,4 @@
-import mujoco
+import mujoco as mj
 
 from hydrax.algs import PredictiveSampling
 from hydrax.risk import ConditionalValueAtRisk
@@ -26,7 +26,7 @@ ctrl = PredictiveSampling(
 
 # Define the model used for simulation
 mj_model = task.mj_model
-mj_data = mujoco.MjData(mj_model)
+mj_data = mj.MjData(mj_model)
 
 # Introduce some modeling error
 mj_model.dof_damping *= 0.1

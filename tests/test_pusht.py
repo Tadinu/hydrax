@@ -9,10 +9,10 @@ def test_task() -> None:
     """Set up the push T task."""
     task = PushT()
 
-    state = mjx.make_data(task.model)
+    state = mjx.make_data(task.mjx_model)
     assert isinstance(state, mjx.Data)
     state = state.replace(mocap_quat=jnp.array([[0.0, 1.0, 0.0, 0.0]]))
-    state = jax.jit(mjx.forward)(task.model, state)
+    state = jax.jit(mjx.forward)(task.mjx_model, state)
 
     pos = task._get_position_err(state)
     assert pos.shape == (3,)

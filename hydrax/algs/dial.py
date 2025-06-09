@@ -46,20 +46,20 @@ class DIAL(SamplingBasedController):
     """
 
     def __init__(
-        self,
-        task: Task,
-        num_samples: int,
-        noise_level: float,
-        beta_opt_iter: float,
-        beta_horizon: float,
-        temperature: float,
-        num_randomizations: int = 1,
-        risk_strategy: RiskStrategy = None,
-        seed: int = 0,
-        plan_horizon: float = 1.0,
-        spline_type: Literal["zero", "linear", "cubic"] = "zero",
-        num_knots: int = 4,
-        iterations: int = 1,
+            self,
+            task: Task,
+            num_samples: int,
+            noise_level: float,
+            beta_opt_iter: float,
+            beta_horizon: float,
+            temperature: float,
+            num_randomizations: int = 1,
+            risk_strategy: RiskStrategy = None,
+            seed: int = 0,
+            plan_horizon: float = 1.0,
+            spline_type: Literal["zero", "linear", "cubic"] = "zero",
+            num_knots: int = 4,
+            iterations: int = 1,
     ) -> None:
         """Initialize the controller.
 
@@ -102,14 +102,14 @@ class DIAL(SamplingBasedController):
         self.temperature = temperature
 
     def init_params(
-        self, initial_knots: jax.Array = None, seed: int = 0
+            self, initial_knots: jax.Array = None, seed: int = 0
     ) -> DIALParams:
         """Initialize the policy parameters."""
         _params = super().init_params(initial_knots, seed)
 
         return DIALParams(
             tk=_params.tk, mean=_params.mean, rng=_params.rng, opt_iteration=0
-            )
+        )
 
     def sample_knots(self, params: DIALParams) -> Tuple[jax.Array, DIALParams]:
         """Sample control knots.
@@ -121,7 +121,7 @@ class DIAL(SamplingBasedController):
 
         noise = jax.random.normal(
             sample_rng,
-            (self.num_samples, self.num_knots, self.task.model.nu),
+            (self.num_samples, self.num_knots, self.task.mjx_model.nu),
         )
 
         noise_level = self.noise_level * jnp.exp(
@@ -139,7 +139,7 @@ class DIAL(SamplingBasedController):
         )
 
     def update_params(
-        self, params: DIALParams, rollouts: Trajectory
+            self, params: DIALParams, rollouts: Trajectory
     ) -> DIALParams:
         """Update the mean with an exponentially weighted average."""
         costs = jnp.sum(rollouts.costs, axis=1)  # sum over time steps

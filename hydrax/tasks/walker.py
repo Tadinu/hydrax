@@ -1,6 +1,6 @@
 import jax
 import jax.numpy as jnp
-import mujoco
+import mujoco as mj
 from mujoco import mjx
 
 from hydrax import ROOT
@@ -12,20 +12,20 @@ class Walker(Task):
 
     def __init__(self) -> None:
         """Load the MuJoCo model and set task parameters."""
-        mj_model = mujoco.MjModel.from_xml_path(
+        mj_model = mj.MjModel.from_xml_path(
             ROOT + "/models/walker/scene.xml"
         )
         super().__init__(mj_model, trace_sites=["torso_site"])
 
         # Get sensor ids
-        self.torso_position_sensor = mujoco.mj_name2id(
-            mj_model, mujoco.mjtObj.mjOBJ_SENSOR, "torso_position"
+        self.torso_position_sensor = mj.mj_name2id(
+            mj_model, mj.mjtObj.mjOBJ_SENSOR, "torso_position"
         )
-        self.torso_velocity_sensor = mujoco.mj_name2id(
-            mj_model, mujoco.mjtObj.mjOBJ_SENSOR, "torso_subtreelinvel"
+        self.torso_velocity_sensor = mj.mj_name2id(
+            mj_model, mj.mjtObj.mjOBJ_SENSOR, "torso_subtreelinvel"
         )
-        self.torso_zaxis_sensor = mujoco.mj_name2id(
-            mj_model, mujoco.mjtObj.mjOBJ_SENSOR, "torso_zaxis"
+        self.torso_zaxis_sensor = mj.mj_name2id(
+            mj_model, mj.mjtObj.mjOBJ_SENSOR, "torso_zaxis"
         )
 
         # Set the target velocity (m/s) and height
@@ -35,17 +35,17 @@ class Walker(Task):
 
     def _get_torso_height(self, state: mjx.Data) -> jax.Array:
         """Get the height of the torso above the ground."""
-        sensor_adr = self.model.sensor_adr[self.torso_position_sensor]
+        sensor_adr = self.mjx_model.sensor_adr[self.torso_position_sensor]
         return state.sensordata[sensor_adr + 2]  # px, py, pz
 
     def _get_torso_velocity(self, state: mjx.Data) -> jax.Array:
         """Get the horizontal velocity of the torso."""
-        sensor_adr = self.model.sensor_adr[self.torso_velocity_sensor]
+        sensor_adr = self.mjx_model.sensor_adr[self.torso_velocity_sensor]
         return state.sensordata[sensor_adr]
 
     def _get_torso_deviation_from_upright(self, state: mjx.Data) -> jax.Array:
         """Get the deviation of the torso from the upright position."""
-        sensor_adr = self.model.sensor_adr[self.torso_zaxis_sensor]
+        sensor_adr = self.mjx_model.sensor_adr[self.torso_zaxis_sensor]
         return state.sensordata[sensor_adr + 2] - 1.0
 
     def running_cost(self, state: mjx.Data, control: jax.Array) -> jax.Array:

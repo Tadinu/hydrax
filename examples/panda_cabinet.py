@@ -1,22 +1,18 @@
 import argparse
 
-from evosax.algorithms.distribution_based.cma_es import CMA_ES
-
+import evosax
 import mujoco as mj
 
-from hydrax.algs import CEM, MPPI, Evosax, PredictiveSampling
+from hydrax.algs import CEM, MPPI, Evosax, PredictiveSampling, DIAL
 from hydrax.simulation.deterministic import run_interactive
-from hydrax.tasks.cube import CubeRotation
+from hydrax.tasks.panda.panda_open_cabinet_env import PandaOpenCabinetEnv
 
 """
-Run an interactive simulation of the cube rotation task.
-
-Double click on the floating target cube, then change the goal orientation with
-[ctrl + left click].
+Run an interactive simulation of the panda opening cabinet.
 """
 
 # Define the task (cost and dynamics)
-task = CubeRotation()
+task = PandaOpenCabinetEnv()
 
 # Parse command-line arguments
 parser = argparse.ArgumentParser(
@@ -31,6 +27,7 @@ subparsers.add_parser("cem", help="Cross-Entropy Method")
 subparsers.add_parser("cmaes", help="CMA-ES")
 args = parser.parse_args()
 
+args.algorithm = "mppi"
 # Set the controller based on command-line arguments
 if args.algorithm == "ps" or args.algorithm is None:
     print("Running predictive sampling")
@@ -72,12 +69,27 @@ elif args.algorithm == "cmaes":
     print("Running CMA-ES")
     ctrl = Evosax(
         task,
-        CMA_ES,
+        evosax.Sep_CMA_ES,
         num_samples=128,
+        elite_ratio=0.5,
         num_randomizations=8,
         plan_horizon=0.25,
         spline_type="zero",
         num_knots=4,
+    )
+elif args.algorithm == "dial":
+    print("Running Diffusion-Inspired Annealing for Legged MPC (DIAL)")
+    ctrl = DIAL(
+        task,
+        num_samples=1024,
+        noise_level=0.4,
+        beta_opt_iter=1.0,
+        beta_horizon=1.0,
+        temperature=0.001,
+        plan_horizon=0.25,
+        spline_type="zero",
+        num_knots=11,
+        iterations=5,
     )
 else:
     parser.error("Invalid algorithm")

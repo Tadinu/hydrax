@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Sequence
+from typing import Dict, Sequence, Optional
 
 import jax
 import jax.numpy as jnp
-import mujoco
+import mujoco as mj
 from mujoco import mjx
 
 
@@ -20,9 +20,9 @@ class Task(ABC):
     """
 
     def __init__(
-        self,
-        mj_model: mujoco.MjModel,
-        trace_sites: Sequence[str] | None = None,
+            self,
+            mj_model: Optional[mj.MjModel] = None,
+            trace_sites: Optional[Sequence[str]] = None,
     ) -> None:
         """Set the model and simulation parameters.
 
@@ -33,30 +33,43 @@ class Task(ABC):
         Note: many other simulator parameters, e.g., simulator time step,
               Newton iterations, etc., are set in the model itself.
         """
-        assert isinstance(mj_model, mujoco.MjModel)
-        self.mj_model = mj_model
-        self.model = mjx.put_model(mj_model)
+        self.trace_sites = trace_sites
+        if mj_model is not None:
+            assert isinstance(mj_model, mj.MjModel)
+            self._mj_model = mj_model
+            self._mjx_model = mjx.put_model(mj_model)
+            self._post_init()
 
+    def _post_init(self, obj_name: Optional[str] = None, keyframe: Optional[str] = None) -> None:
         # Set actuator limits
         self.u_min = jnp.where(
-            mj_model.actuator_ctrllimited,
-            mj_model.actuator_ctrlrange[:, 0],
+            self.mj_model.actuator_ctrllimited,
+            self.mj_model.actuator_ctrlrange[:, 0],
             -jnp.inf,
         )
         self.u_max = jnp.where(
-            mj_model.actuator_ctrllimited,
-            mj_model.actuator_ctrlrange[:, 1],
+            self.mj_model.actuator_ctrllimited,
+            self.mj_model.actuator_ctrlrange[:, 1],
             jnp.inf,
         )
 
         # Simulation timestep
-        self.dt = mj_model.opt.timestep
+        if not hasattr(self, "dt"):
+            self.dt = self.mj_model.opt.timestep
 
         # Get site IDs for points we want to trace
-        trace_sites = trace_sites or []
+        trace_sites = self.trace_sites or []
         self.trace_site_ids = jnp.array(
-            [mj_model.site(name).id for name in trace_sites]
+            [self.mj_model.site(name).id for name in trace_sites]
         )
+
+    @property
+    def mj_model(self) -> mj.MjModel:
+        return self._mj_model
+
+    @property
+    def mjx_model(self) -> mjx.Model:
+        return self._mjx_model
 
     @abstractmethod
     def running_cost(self, state: mjx.Data, control: jax.Array) -> jax.Array:
@@ -118,7 +131,7 @@ class Task(ABC):
         return {}
 
     def domain_randomize_data(
-        self, data: mjx.Data, rng: jax.Array
+            self, data: mjx.Data, rng: jax.Array
     ) -> Dict[str, jax.Array]:
         """Generate randomized data elements for domain randomization.
 

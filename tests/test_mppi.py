@@ -23,7 +23,7 @@ def test_open_loop() -> None:
     jit_opt = jax.jit(opt.optimize)
 
     # Initialize the system state and policy parameters
-    state = mjx.make_data(task.model)
+    state = mjx.make_data(task.mjx_model)
     params = opt.init_params()
 
     for _ in range(100):
@@ -37,7 +37,7 @@ def test_open_loop() -> None:
 
     # Roll out the solution, check that it's good enough
     states, final_rollout = jax.jit(opt.eval_rollouts)(
-        task.model, state, controls, knots
+        task.mjx_model, state, controls, knots
     )
     total_cost = jnp.sum(final_rollout.costs[0])
     assert total_cost <= 9.0

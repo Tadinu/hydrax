@@ -1,14 +1,27 @@
 <mujoco model="panda single cube">
   <include file="mjx_scene.xml"/>
 
+  <default>
+    <default class="cube">
+      <geom friction="0.3 0.05 0.01" conaffinity="2" />
+    </default>
+  </default>
+
   <worldbody>
     <body name="box" pos="0.5 0 0.03">
       <freejoint/>
       <geom type="box" name="box" size="0.02 0.02 0.03" condim="3"
        friction="1 .03 .003" rgba="0 1 0 1" contype="2" conaffinity="1" solref="0.01 1"/>
+      <site name="box"/>
     </body>
-    <body mocap="true" name="mocap_target">
+    <body mocap="true" name="mocap_target" pos="0.3 0.0 0.2" quat="0 0 0.707107 0.707107">
       <geom type="box" size="0.02 0.02 0.03" rgba="1 0 0 0.2" contype="0" conaffinity="0"/>
     </body>
   </worldbody>
+
+  <!-- Sensors for the cube -->
+  <sensor>
+    <framepos name="cube_position" objtype="body" objname="box" reftype="site" refname="leap_rh/grasp_site" />
+    <framequat name="cube_orientation" objtype="body" objname="box" reftype="body" refname="mocap_target"/>
+  </sensor>
 </mujoco>

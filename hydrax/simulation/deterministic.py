@@ -4,7 +4,7 @@ import os
 
 import jax
 import jax.numpy as jnp
-import mujoco
+import mujoco as mj
 import mujoco.viewer
 import numpy as np
 from mujoco import mjx
@@ -20,19 +20,19 @@ controller running one after the other in the same thread.
 
 
 def run_interactive(  # noqa: PLR0912, PLR0915
-    controller: SamplingBasedController,
-    mj_model: mujoco.MjModel,
-    mj_data: mujoco.MjData,
-    frequency: float,
-    initial_knots: jax.Array = None,
-    fixed_camera_id: int = None,
-    show_traces: bool = True,
-    max_traces: int = 5,
-    trace_width: float = 5.0,
-    trace_color: Sequence = [1.0, 1.0, 1.0, 0.1],
-    reference: np.ndarray = None,
-    reference_fps: float = 30.0,
-    record_video: bool = False,
+        controller: SamplingBasedController,
+        mj_model: mj.MjModel,
+        mj_data: mj.MjData,
+        frequency: float,
+        initial_knots: jax.Array = None,
+        fixed_camera_id: int = None,
+        show_traces: bool = True,
+        max_traces: int = 5,
+        trace_width: float = 5.0,
+        trace_color: Sequence = [1.0, 1.0, 1.0, 0.1],
+        reference: np.ndarray = None,
+        reference_fps: float = 30.0,
+        record_video: bool = False,
 ) -> None:
     """Run an interactive simulation with the MPC controller.
 
@@ -104,15 +104,15 @@ def run_interactive(  # noqa: PLR0912, PLR0915
 
     # Ghost reference setup
     if reference is not None:
-        ref_data = mujoco.MjData(mj_model)
+        ref_data = mj.MjData(mj_model)
         assert reference.shape[1] == mj_model.nq
         ref_data.qpos[:] = reference[0, :]
-        mujoco.mj_forward(mj_model, ref_data)
+        mj.mj_forward(mj_model, ref_data)
 
-        vopt = mujoco.MjvOption()
-        vopt.flags[mujoco.mjtVisFlag.mjVIS_TRANSPARENT] = True  # Transparent.
-        pert = mujoco.MjvPerturb()
-        catmask = mujoco.mjtCatBit.mjCAT_DYNAMIC  # only show dynamic bodies
+        vopt = mj.MjvOption()
+        vopt.flags[mj.mjtVisFlag.mjVIS_TRANSPARENT] = True  # Transparent.
+        pert = mj.MjvPerturb()
+        catmask = mj.mjtCatBit.mjCAT_DYNAMIC  # only show dynamic bodies
 
     # Initialize video recording if enabled
     recorder = None
@@ -144,11 +144,11 @@ def run_interactive(  # noqa: PLR0912, PLR0915
         if show_traces:
             num_trace_sites = len(controller.task.trace_site_ids)
             for i in range(
-                num_trace_sites * num_traces * controller.ctrl_steps
+                    num_trace_sites * num_traces * controller.ctrl_steps
             ):
-                mujoco.mjv_initGeom(
+                mj.mjv_initGeom(
                     viewer.user_scn.geoms[i],
-                    type=mujoco.mjtGeom.mjGEOM_LINE,
+                    type=mj.mjtGeom.mjGEOM_LINE,
                     size=np.zeros(3),
                     pos=np.zeros(3),
                     mat=np.eye(3).flatten(),
@@ -158,7 +158,7 @@ def run_interactive(  # noqa: PLR0912, PLR0915
 
         # Add geometry for the ghost reference
         if reference is not None:
-            mujoco.mjv_addGeoms(
+            mj.mjv_addGeoms(
                 mj_model, ref_data, vopt, pert, catmask, viewer.user_scn
             )
 
@@ -185,9 +185,9 @@ def run_interactive(  # noqa: PLR0912, PLR0915
                 for k in range(num_trace_sites):
                     for i in range(num_traces):
                         for j in range(controller.ctrl_steps):
-                            mujoco.mjv_connector(
+                            mj.mjv_connector(
                                 viewer.user_scn.geoms[ii],
-                                mujoco.mjtGeom.mjGEOM_LINE,
+                                mj.mjtGeom.mjGEOM_LINE,
                                 trace_width,
                                 rollouts.trace_sites[i, j, k],
                                 rollouts.trace_sites[i, j + 1, k],
@@ -200,8 +200,8 @@ def run_interactive(  # noqa: PLR0912, PLR0915
                 i_ref = int(t_ref)
                 i_ref = min(i_ref, reference.shape[0] - 1)
                 ref_data.qpos[:] = reference[i_ref]
-                mujoco.mj_forward(mj_model, ref_data)
-                mujoco.mjv_updateScene(
+                mj.mj_forward(mj_model, ref_data)
+                mj.mjv_updateScene(
                     mj_model,
                     ref_data,
                     vopt,
@@ -224,7 +224,7 @@ def run_interactive(  # noqa: PLR0912, PLR0915
             # simulate the system between spline replanning steps
             for i in range(sim_steps_per_replan):
                 mj_data.ctrl[:] = np.array(us[i])
-                mujoco.mj_step(mj_model, mj_data)
+                mj.mj_step(mj_model, mj_data)
                 viewer.sync()
 
                 # Capture frame if recording

@@ -27,7 +27,7 @@ def test_init_params() -> None:
     params = controller.init_params()
     expected_shape = (
         controller.num_knots,
-        task.model.nu,
+        task.mjx_model.nu,
     )
     assert params.mean.shape == expected_shape
     assert params.cov.shape == expected_shape
@@ -37,7 +37,7 @@ def test_init_params() -> None:
     # Test with initial control knots
     key = jax.random.key(0)  # seed
     initial_knots = jax.random.uniform(
-        key, shape=(controller.num_knots, task.model.nu)
+        key, shape=(controller.num_knots, task.mjx_model.nu)
     )
     params = controller.init_params(initial_knots=initial_knots)
     assert params.mean.shape == expected_shape
@@ -45,6 +45,7 @@ def test_init_params() -> None:
     assert params.rng.shape == ()
     assert params.tk.shape == (controller.num_knots,)
     assert jnp.all(params.mean == initial_knots)
+
 
 def test_get_action() -> None:
     """Make sure we can get the action from the policy parameters of the correct shape."""
@@ -54,8 +55,9 @@ def test_get_action() -> None:
     )
     params = controller.init_params()
     action = controller.get_action(params, 0)
-    expected_shape = task.model.nu
+    expected_shape = task.mjx_model.nu
     assert action.shape[0] == expected_shape
+
 
 if __name__ == "__main__":
     test_traj()

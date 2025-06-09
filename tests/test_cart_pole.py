@@ -9,7 +9,7 @@ def test_cart_pole() -> None:
     task = CartPole()
     assert isinstance(task, CartPole)
 
-    state = mjx.make_data(task.model)
+    state = mjx.make_data(task.mjx_model)
     assert isinstance(state, mjx.Data)
 
     ell = task.running_cost(state, jnp.zeros(1))

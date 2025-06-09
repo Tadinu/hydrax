@@ -1,4 +1,4 @@
-import mujoco
+import mujoco as mj
 
 from hydrax.algs import PredictiveSampling
 from hydrax.simulation.asynchronous import run_interactive
@@ -31,8 +31,8 @@ if __name__ == "__main__":
     mj_model.opt.timestep = 0.005
     mj_model.opt.iterations = 100
     mj_model.opt.ls_iterations = 50
-    mj_model.opt.cone = mujoco.mjtCone.mjCONE_ELLIPTIC
-    mj_data = mujoco.MjData(mj_model)
+    mj_model.opt.cone = mj.mjtCone.mjCONE_ELLIPTIC
+    mj_data = mj.MjData(mj_model)
 
     # Run the interactive simulation
     run_interactive(

@@ -1,6 +1,6 @@
 import argparse
 
-import mujoco
+import mujoco as mj
 import numpy as np
 
 from hydrax.algs import MPPI, PredictiveSampling
@@ -54,7 +54,7 @@ else:
 mj_model = task.mj_model
 
 # Set the initial state
-mj_data = mujoco.MjData(mj_model)
+mj_data = mj.MjData(mj_model)
 mj_data.qpos[:] = np.array([0.0])
 mj_data.qvel[:] = np.array([0.0])
 

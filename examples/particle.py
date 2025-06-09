@@ -2,7 +2,7 @@ import argparse
 
 from evosax.algorithms.distribution_based import CMA_ES, RandomSearch, GradientlessDescent, Open_ES, SimulatedAnnealing, xNES
 
-import mujoco
+import mujoco as mj
 import jax
 
 from hydrax.algs import MPPI, CEM, Evosax, PredictiveSampling, DIAL
@@ -169,7 +169,7 @@ else:
 
 # Define the model used for simulation
 mj_model = task.mj_model
-mj_data = mujoco.MjData(mj_model)
+mj_data = mj.MjData(mj_model)
 
 # Run the interactive simulation
 run_interactive(

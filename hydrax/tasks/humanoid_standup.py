@@ -2,7 +2,7 @@ from typing import Dict
 
 import jax
 import jax.numpy as jnp
-import mujoco
+import mujoco as mj
 from mujoco import mjx
 
 from hydrax import ROOT
@@ -14,7 +14,7 @@ class HumanoidStandup(Task):
 
     def __init__(self) -> None:
         """Load the MuJoCo model and set task parameters."""
-        mj_model = mujoco.MjModel.from_xml_path(ROOT + "/models/g1/scene.xml")
+        mj_model = mj.MjModel.from_xml_path(ROOT + "/models/g1/scene.xml")
         super().__init__(
             mj_model,
             trace_sites=["imu_in_torso", "left_foot", "right_foot"],
@@ -37,8 +37,8 @@ class HumanoidStandup(Task):
 
     def _get_torso_orientation(self, state: mjx.Data) -> jax.Array:
         """Get the rotation from the current torso orientation to upright."""
-        sensor_adr = self.model.sensor_adr[self.orientation_sensor_id]
-        quat = state.sensordata[sensor_adr : sensor_adr + 4]
+        sensor_adr = self.mjx_model.sensor_adr[self.orientation_sensor_id]
+        quat = state.sensordata[sensor_adr: sensor_adr + 4]
         upright = jnp.array([0.0, 0.0, 1.0])
         return mjx._src.math.rotate(upright, quat)
 
@@ -55,19 +55,19 @@ class HumanoidStandup(Task):
 
     def terminal_cost(self, state: mjx.Data) -> jax.Array:
         """The terminal cost ϕ(x_T)."""
-        return self.running_cost(state, jnp.zeros(self.model.nu))
+        return self.running_cost(state, jnp.zeros(self.mjx_model.nu))
 
     def domain_randomize_model(self, rng: jax.Array) -> Dict[str, jax.Array]:
         """Randomize the friction parameters."""
-        n_geoms = self.model.geom_friction.shape[0]
+        n_geoms = self.mjx_model.geom_friction.shape[0]
         multiplier = jax.random.uniform(rng, (n_geoms,), minval=0.5, maxval=2.0)
-        new_frictions = self.model.geom_friction.at[:, 0].set(
-            self.model.geom_friction[:, 0] * multiplier
+        new_frictions = self.mjx_model.geom_friction.at[:, 0].set(
+            self.mjx_model.geom_friction[:, 0] * multiplier
         )
         return {"geom_friction": new_frictions}
 
     def domain_randomize_data(
-        self, data: mjx.Data, rng: jax.Array
+            self, data: mjx.Data, rng: jax.Array
     ) -> Dict[str, jax.Array]:
         """Randomly perturb the measured base position and velocities."""
         rng, q_rng, v_rng = jax.random.split(rng, 3)

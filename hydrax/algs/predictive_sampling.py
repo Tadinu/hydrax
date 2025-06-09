@@ -26,17 +26,17 @@ class PredictiveSampling(SamplingBasedController):
     """A simple implementation of https://arxiv.org/abs/2212.00541."""
 
     def __init__(
-        self,
-        task: Task,
-        num_samples: int,
-        noise_level: float,
-        num_randomizations: int = 1,
-        risk_strategy: RiskStrategy = None,
-        seed: int = 0,
-        plan_horizon: float = 1.0,
-        spline_type: Literal["zero", "linear", "cubic"] = "zero",
-        num_knots: int = 4,
-        iterations: int = 1,
+            self,
+            task: Task,
+            num_samples: int,
+            noise_level: float,
+            num_randomizations: int = 1,
+            risk_strategy: RiskStrategy = None,
+            seed: int = 0,
+            plan_horizon: float = 1.0,
+            spline_type: Literal["zero", "linear", "cubic"] = "zero",
+            num_knots: int = 4,
+            iterations: int = 1,
     ) -> None:
         """Initialize the controller.
 
@@ -68,7 +68,7 @@ class PredictiveSampling(SamplingBasedController):
         self.num_samples = num_samples
 
     def init_params(
-        self, initial_knots: jax.Array = None, seed: int = 0
+            self, initial_knots: jax.Array = None, seed: int = 0
     ) -> PSParams:
         """Initialize the policy parameters."""
         _params = super().init_params(initial_knots, seed)
@@ -82,7 +82,7 @@ class PredictiveSampling(SamplingBasedController):
             (
                 self.num_samples,
                 self.num_knots,
-                self.task.model.nu,
+                self.task.mjx_model.nu,
             ),
         )
         controls = params.mean + self.noise_level * noise

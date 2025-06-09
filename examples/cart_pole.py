@@ -1,6 +1,6 @@
 import argparse
 
-import mujoco
+import mujoco as mj
 
 from hydrax.algs import CEM, MPPI, PredictiveSampling
 from hydrax.simulation.deterministic import run_interactive
@@ -64,7 +64,7 @@ else:
 
 # Define the model used for simulation
 mj_model = task.mj_model
-mj_data = mujoco.MjData(mj_model)
+mj_data = mj.MjData(mj_model)
 
 # Run the interactive simulation
 run_interactive(

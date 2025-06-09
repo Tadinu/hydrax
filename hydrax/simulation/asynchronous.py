@@ -4,7 +4,7 @@ from multiprocessing import Event, shared_memory
 
 import jax
 import jax.numpy as jnp
-import mujoco
+import mujoco as mj
 import mujoco.viewer
 import numpy as np
 from mujoco import mjx
@@ -67,7 +67,7 @@ class SharedMemoryNumpyArray:
 class SharedMemoryMujocoData:
     """Helper class for passing mujoco data between concurrent processes."""
 
-    def __init__(self, mj_data: mujoco.MjData, ctx: mp.context.BaseContext):
+    def __init__(self, mj_data: mj.MjData, ctx: mp.context.BaseContext):
         """Create shared memory objects for state and control data.
 
         Note that this does not copy the full mj_data object, only those fields
@@ -98,11 +98,11 @@ class SharedMemoryMujocoData:
 
 
 def run_controller(
-    ctrl: SamplingBasedController,
-    shm_data: SharedMemoryMujocoData,
-    ready: Event,
-    finished: Event,
-    initial_knots: jax.Array = None,
+        ctrl: SamplingBasedController,
+        shm_data: SharedMemoryMujocoData,
+        ready: Event,
+        finished: Event,
+        initial_knots: jax.Array = None,
 ) -> None:
     """Run the controller, communicating with the simulator over shared memory.
 
@@ -114,7 +114,7 @@ def run_controller(
         initial_knots: The initial control to use for the controller.
     """
     # Initialize the policy parameters and state estimate
-    mjx_data = mjx.make_data(ctrl.task.model)
+    mjx_data = mjx.make_data(ctrl.task.mjx_model)
     policy_params = ctrl.init_params(initial_knots=initial_knots)
 
     # Print out some planning horizon information
@@ -172,11 +172,11 @@ def run_controller(
 
 
 def run_simulator(
-    mj_model: mujoco.MjModel,
-    mj_data: mujoco.MjData,
-    shm_data: SharedMemoryMujocoData,
-    ready: Event,
-    finished: Event,
+        mj_model: mj.MjModel,
+        mj_data: mj.MjData,
+        shm_data: SharedMemoryMujocoData,
+        ready: Event,
+        finished: Event,
 ) -> None:
     """Run a simulation, communicating with the controller over shared memory.
 
@@ -208,7 +208,7 @@ def run_simulator(
             mj_data.ctrl[:] = shm_data.ctrl[:]
 
             # Step the simulation
-            mujoco.mj_step(mj_model, mj_data)
+            mj.mj_step(mj_model, mj_data)
             viewer.sync()
 
             # Try to run in roughly real-time
@@ -221,10 +221,10 @@ def run_simulator(
 
 
 def run_interactive(
-    controller: SamplingBasedController,
-    mj_model: mujoco.MjModel,
-    mj_data: mujoco.MjData,
-    initial_knots: jax.Array = None,
+        controller: SamplingBasedController,
+        mj_model: mj.MjModel,
+        mj_data: mj.MjData,
+        initial_knots: jax.Array = None,
 ) -> None:
     """Run an asynchronous interactive simulation.
 

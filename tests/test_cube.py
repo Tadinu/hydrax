@@ -3,7 +3,7 @@ from typing import Tuple
 
 import jax
 import jax.numpy as jnp
-import mujoco
+import mujoco as mj
 from mujoco import mjx
 
 from hydrax import ROOT
@@ -14,7 +14,7 @@ def test_mjx_model() -> None:
     """Test that the MJX model runs without crashing."""
     rng = jax.random.key(0)
 
-    mj_model = mujoco.MjModel.from_xml_path(ROOT + "/models/cube/scene.xml")
+    mj_model = mj.MjModel.from_xml_path(ROOT + "/models/cube/scene.xml")
     model = mjx.put_model(mj_model)
     data = mjx.make_data(model)
 
@@ -54,10 +54,10 @@ def test_task() -> None:
     """Set up the cube rotation task."""
     task = CubeRotation()
 
-    state = mjx.make_data(task.model)
+    state = mjx.make_data(task.mjx_model)
     assert isinstance(state, mjx.Data)
     state = state.replace(mocap_quat=jnp.array([[0.0, 1.0, 0.0, 0.0]]))
-    state = jax.jit(mjx.forward)(task.model, state)
+    state = jax.jit(mjx.forward)(task.mjx_model, state)
 
     # Check cube position relative to the target grasp position
     cube_position = task._get_cube_position_err(state)

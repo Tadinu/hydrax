@@ -1,7 +1,7 @@
 import multiprocessing as mp
 import time
 
-import mujoco
+import mujoco as mj
 import numpy as np
 
 from hydrax import ROOT
@@ -41,8 +41,8 @@ def manual_test_controller() -> None:
     """Test running the controller in a separate process."""
     ctx = mp.get_context("spawn")
 
-    mj_model = mujoco.MjModel.from_xml_path(ROOT + "/models/pendulum/scene.xml")
-    mj_data = mujoco.MjData(mj_model)
+    mj_model = mj.MjModel.from_xml_path(ROOT + "/models/pendulum/scene.xml")
+    mj_data = mj.MjData(mj_model)
 
     task = Pendulum()
     ctrl = PredictiveSampling(task, num_samples=8, noise_level=0.1)
@@ -75,8 +75,8 @@ def manual_test_simulator() -> None:
     """
     ctx = mp.get_context("spawn")
 
-    mj_model = mujoco.MjModel.from_xml_path(ROOT + "/models/pendulum/scene.xml")
-    mj_data = mujoco.MjData(mj_model)
+    mj_model = mj.MjModel.from_xml_path(ROOT + "/models/pendulum/scene.xml")
+    mj_data = mj.MjData(mj_model)
     shared_mjdata = SharedMemoryMujocoData(mj_data, ctx)
     assert shared_mjdata.ctrl[0] == 0.0
     assert shared_mjdata.qpos[0] == 0.0
@@ -105,8 +105,8 @@ def manual_test_interactive() -> None:
     Note that this does not run as a normal test, only when called directly. It
     opens a window and would block the test suite.
     """
-    mj_model = mujoco.MjModel.from_xml_path(ROOT + "/models/pendulum/scene.xml")
-    mj_data = mujoco.MjData(mj_model)
+    mj_model = mj.MjModel.from_xml_path(ROOT + "/models/pendulum/scene.xml")
+    mj_data = mj.MjData(mj_model)
 
     task = Pendulum()
     ctrl = PredictiveSampling(task, num_samples=64, noise_level=0.1)
