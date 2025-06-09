@@ -2,7 +2,7 @@ from typing import Dict
 
 import jax
 import jax.numpy as jnp
-import mujoco
+import mujoco as mj
 from mujoco import mjx
 
 from hydrax import ROOT
@@ -14,7 +14,7 @@ class Crane(Task):
 
     def __init__(self, impl: str = "jax") -> None:
         """Load the MuJoCo model and set task parameters."""
-        mj_model = mujoco.MjModel.from_xml_path(
+        mj_model = mj.MjModel.from_xml_path(
             ROOT + "/models/crane/scene.xml"
         )
         super().__init__(mj_model, trace_sites=["payload_end"], impl=impl)
@@ -30,14 +30,14 @@ class Crane(Task):
     def _get_payload_position(self, state: mjx.Data) -> jax.Array:
         """Get the position of the payload relative to the target."""
         return state.sensordata[
-            self.payload_pos_sensor_adr : self.payload_pos_sensor_adr + 3
-        ]
+               self.payload_pos_sensor_adr: self.payload_pos_sensor_adr + 3
+               ]
 
     def _get_payload_velocity(self, state: mjx.Data) -> jax.Array:
         """Get the velocity of the payload."""
         return state.sensordata[
-            self.payload_vel_sensor_adr : self.payload_vel_sensor_adr + 3
-        ]
+               self.payload_vel_sensor_adr: self.payload_vel_sensor_adr + 3
+               ]
 
     def running_cost(self, state: mjx.Data, control: jax.Array) -> jax.Array:
         """The running cost ℓ(xₜ, uₜ) encourages payload tracking."""
@@ -52,7 +52,7 @@ class Crane(Task):
 
     def terminal_cost(self, state: mjx.Data) -> jax.Array:
         """Terminal cost is the same as running cost."""
-        return self.running_cost(state, jnp.zeros(self.model.nu))
+        return self.running_cost(state, jnp.zeros(self.mjx_model.nu))
 
     def domain_randomize_model(self, rng: jax.Array) -> Dict[str, jax.Array]:
         """Randomize various model parameters."""
@@ -62,30 +62,30 @@ class Crane(Task):
         damping_multiplier = jax.random.uniform(
             damping_rng, (1,), minval=0.05, maxval=20.0
         )
-        new_damping = self.model.dof_damping * damping_multiplier
+        new_damping = self.mjx_model.dof_damping * damping_multiplier
 
         # Randomize payload mass and inertia
         mass_multiplier = jax.random.uniform(
             mass_rng, (), minval=0.5, maxval=2.0
         )
-        new_mass = self.model.body_mass.at[self.payload_idx].set(
-            self.model.body_mass[self.payload_idx] * mass_multiplier
+        new_mass = self.mjx_model.body_mass.at[self.payload_idx].set(
+            self.mjx_model.body_mass[self.payload_idx] * mass_multiplier
         )
-        new_inertia = self.model.body_inertia.at[self.payload_idx].set(
-            self.model.body_inertia[self.payload_idx] * mass_multiplier
+        new_inertia = self.mjx_model.body_inertia.at[self.payload_idx].set(
+            self.mjx_model.body_inertia[self.payload_idx] * mass_multiplier
         )
 
         # Randomize actuator gains
         # Adopted from the MJX tutorial:
         # https://github.com/google-deepmind/mujoco/blob/main/mjx/tutorial.ipynb
         new_gain = (
-            jax.random.uniform(actuator_rng, (1,), minval=-5, maxval=5)
-            + self.model.actuator_gainprm[:, 0]
+                jax.random.uniform(actuator_rng, (1,), minval=-5, maxval=5)
+                + self.mjx_model.actuator_gainprm[:, 0]
         )
-        new_actuator_gainprm = self.model.actuator_gainprm.at[:, 0].set(
+        new_actuator_gainprm = self.mjx_model.actuator_gainprm.at[:, 0].set(
             new_gain
         )
-        new_actuator_biasprm = self.model.actuator_biasprm.at[:, 1].set(
+        new_actuator_biasprm = self.mjx_model.actuator_biasprm.at[:, 1].set(
             -new_gain
         )
 
@@ -98,11 +98,11 @@ class Crane(Task):
         }
 
     def domain_randomize_data(
-        self, data: mjx.Data, rng: jax.Array
+            self, data: mjx.Data, rng: jax.Array
     ) -> Dict[str, jax.Array]:
         """Add noise to the state estimate."""
         rng, q_rng, v_rng = jax.random.split(rng, 3)
-        q_err = 0.01 * jax.random.normal(q_rng, (self.model.nq,))
-        v_err = 0.01 * jax.random.normal(v_rng, (self.model.nv,))
+        q_err = 0.01 * jax.random.normal(q_rng, (self.mjx_model.nq,))
+        v_err = 0.01 * jax.random.normal(v_rng, (self.mjx_model.nv,))
 
         return {"qpos": data.qpos + q_err, "qvel": data.qvel + v_err}

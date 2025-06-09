@@ -1,6 +1,6 @@
 import argparse
+import mujoco as mj
 
-import mujoco
 
 from hydrax.algs import PredictiveSampling
 from hydrax.simulation.deterministic import run_interactive
@@ -36,7 +36,7 @@ ctrl = PredictiveSampling(
 
 # Define the model used for simulation
 mj_model = task.mj_model
-mj_data = mujoco.MjData(mj_model)
+mj_data = mj.MjData(mj_model)
 
 # Run the interactive simulation
 run_interactive(

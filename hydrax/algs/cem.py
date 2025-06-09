@@ -27,20 +27,20 @@ class CEM(SamplingBasedController):
     """Cross-entropy method with diagonal covariance."""
 
     def __init__(
-        self,
-        task: Task,
-        num_samples: int,
-        num_elites: int,
-        sigma_start: float,
-        sigma_min: float,
-        num_randomizations: int = 1,
-        explore_fraction: float = 0.0,
-        risk_strategy: RiskStrategy = None,
-        seed: int = 0,
-        plan_horizon: float = 1.0,
-        spline_type: Literal["zero", "linear", "cubic"] = "zero",
-        num_knots: int = 4,
-        iterations: int = 1,
+            self,
+            task: Task,
+            num_samples: int,
+            num_elites: int,
+            sigma_start: float,
+            sigma_min: float,
+            num_randomizations: int = 1,
+            explore_fraction: float = 0.0,
+            risk_strategy: RiskStrategy = None,
+            seed: int = 0,
+            plan_horizon: float = 1.0,
+            spline_type: Literal["zero", "linear", "cubic"] = "zero",
+            num_knots: int = 4,
+            iterations: int = 1,
     ) -> None:
         """Initialize the controller.
 
@@ -83,7 +83,7 @@ class CEM(SamplingBasedController):
         self.num_explore = int(self.num_samples * explore_fraction)
 
     def init_params(
-        self, initial_knots: jax.Array = None, seed: int = 0
+            self, initial_knots: jax.Array = None, seed: int = 0
     ) -> CEMParams:
         """Initialize the policy parameters."""
         _params = super().init_params(initial_knots, seed)
@@ -100,12 +100,12 @@ class CEM(SamplingBasedController):
         main_shape = (
             self.num_samples - self.num_explore,
             self.num_knots,
-            self.task.model.nu,
+            self.task.mjx_model.nu,
         )
         explore_shape = (
             self.num_explore,
             self.num_knots,
-            self.task.model.nu,
+            self.task.mjx_model.nu,
         )
 
         # Sample main knots with current covariance
@@ -128,7 +128,7 @@ class CEM(SamplingBasedController):
         return controls, params.replace(rng=rng)
 
     def update_params(
-        self, params: CEMParams, rollouts: Trajectory
+            self, params: CEMParams, rollouts: Trajectory
     ) -> CEMParams:
         """Update the mean with an exponentially weighted average."""
         costs = jnp.sum(rollouts.costs, axis=1)  # sum over time steps

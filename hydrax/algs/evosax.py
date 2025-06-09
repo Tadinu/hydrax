@@ -36,19 +36,19 @@ class Evosax(SamplingBasedController):
     """
 
     def __init__(
-        self,
-        task: Task,
-        optimizer: EvolutionaryAlgorithm,
-        num_samples: int,
-        es_params: EvoParams = None,
-        num_randomizations: int = 1,
-        risk_strategy: RiskStrategy = None,
-        seed: int = 0,
-        plan_horizon: float = 1.0,
-        spline_type: Literal["zero", "linear", "cubic"] = "zero",
-        num_knots: int = 4,
-        iterations: int = 1,
-        **kwargs,
+            self,
+            task: Task,
+            optimizer: EvolutionaryAlgorithm,
+            num_samples: int,
+            es_params: EvoParams = None,
+            num_randomizations: int = 1,
+            risk_strategy: RiskStrategy = None,
+            seed: int = 0,
+            plan_horizon: float = 1.0,
+            spline_type: Literal["zero", "linear", "cubic"] = "zero",
+            num_knots: int = 4,
+            iterations: int = 1,
+            **kwargs,
     ) -> None:
         """Initialize the controller.
 
@@ -82,7 +82,7 @@ class Evosax(SamplingBasedController):
         self.strategy = optimizer(
             population_size=num_samples,
             # Only to inform the dimension to evosax
-            solution=jnp.zeros(task.model.nu * self.num_knots),
+            solution=jnp.zeros(task.mjx_model.nu * self.num_knots), 
             **kwargs,
         )
 
@@ -91,7 +91,7 @@ class Evosax(SamplingBasedController):
         self.es_params = es_params
 
     def init_params(
-        self, initial_knots: jax.Array = None, seed: int = 0
+            self, initial_knots: jax.Array = None, seed: int = 0
     ) -> EvosaxParams:
         """Initialize the policy parameters."""
         _params = super().init_params(initial_knots, seed)
@@ -109,7 +109,7 @@ class Evosax(SamplingBasedController):
         )
 
     def sample_knots(
-        self, params: EvosaxParams
+            self, params: EvosaxParams
     ) -> Tuple[jax.Array, EvosaxParams]:
         """Sample control sequences from the proposal distribution."""
         rng, sample_rng = jax.random.split(params.rng)
@@ -124,14 +124,14 @@ class Evosax(SamplingBasedController):
             (
                 self.strategy.population_size,
                 self.num_knots,
-                self.task.model.nu,
+                self.task.mjx_model.nu,
             ),
         )
 
         return controls, params.replace(opt_state=opt_state, rng=rng)
 
     def update_params(
-        self, params: EvosaxParams, rollouts: Trajectory
+            self, params: EvosaxParams, rollouts: Trajectory
     ) -> EvosaxParams:
         """Update the policy parameters based on the rollouts."""
         costs = jnp.sum(rollouts.costs, axis=1)  # sum over time steps

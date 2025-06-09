@@ -22,7 +22,7 @@ def test_walker(impl: str) -> None:
     assert isinstance(state, mjx.Data)
 
     # Check sensor measurements
-    state = mjx.forward(task.model, state)
+    state = mjx.forward(task.mjx_model, state)
     pz = task._get_torso_height(state)
     vx = task._get_torso_velocity(state)
     oz = task._get_torso_deviation_from_upright(state)
@@ -31,7 +31,7 @@ def test_walker(impl: str) -> None:
     assert oz == 0.0
 
     # Check costs
-    ell = task.running_cost(state, jnp.zeros(task.model.nu))
+    ell = task.running_cost(state, jnp.zeros(task.mjx_model.nu))
     assert ell.shape == ()
     assert ell > 0.0
 

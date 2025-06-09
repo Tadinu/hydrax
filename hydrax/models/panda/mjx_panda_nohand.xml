@@ -183,7 +183,7 @@
                     <geom mesh="link7_6" material="black" class="visual"/>
                     <geom mesh="link7_7" material="white" class="visual"/>
                     <geom mesh="link7_c" class="collision"/>
-                    <body name="attachment" pos="0 0 0.107" quat="0.3826834 0 0 0.9238795">
+                    <body name="attachment">
                       <site name="attachment_site"/>
                     </body>
                   </body>

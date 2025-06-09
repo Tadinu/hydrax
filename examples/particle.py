@@ -1,7 +1,7 @@
 import argparse
 
 import jax
-import mujoco
+import mujoco as mj
 from evosax.algorithms.distribution_based import (
     CMA_ES,
     GradientlessDescent,
@@ -181,7 +181,7 @@ else:
 
 # Define the model used for simulation
 mj_model = task.mj_model
-mj_data = mujoco.MjData(mj_model)
+mj_data = mj.MjData(mj_model)
 
 # Run the interactive simulation
 run_interactive(

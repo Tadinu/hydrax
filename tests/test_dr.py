@@ -16,16 +16,16 @@ def test_domain_randomization() -> None:
     )
 
     # The models should have different numbers of randomizations
-    original_shape = task.model.actuator_gainprm.shape
-    assert ctrl1.model.actuator_gainprm.shape == original_shape
-    assert ctrl2.model.actuator_gainprm.shape == (2, *original_shape)
+    original_shape = task.mjx_model.actuator_gainprm.shape
+    assert ctrl1.mjx_model.actuator_gainprm.shape == original_shape
+    assert ctrl2.mjx_model.actuator_gainprm.shape == (2, *original_shape)
 
     # The randomized parameters should be different from the original model
     assert not jnp.allclose(
-        ctrl2.model.actuator_gainprm[0], task.model.actuator_gainprm
+        ctrl2.mjx_model.actuator_gainprm[0], task.mjx_model.actuator_gainprm
     )
     assert jnp.allclose(
-        ctrl1.model.actuator_gainprm, task.model.actuator_gainprm
+        ctrl1.mjx_model.actuator_gainprm, task.mjx_model.actuator_gainprm
     )
 
 
@@ -42,7 +42,7 @@ def test_opt() -> None:
     params = ctrl.init_params()
 
     # Create a random initial state
-    state = mjx.make_data(task.model)
+    state = mjx.make_data(task.mjx_model)
     assert state.qpos.shape == (2,)
 
     # Run an optimization step

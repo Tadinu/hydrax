@@ -19,7 +19,7 @@ def test_particle(impl: str) -> None:
     state = state.replace(mocap_pos=jnp.array([[0.0, 0.1, 0.0]]))
     assert isinstance(state, mjx.Data)
     assert state.site_xpos.shape == (1, 3)
-    state = mjx.forward(task.model, state)  # compute site positions
+    state = mjx.forward(task.mjx_model, state)  # compute site positions
     assert not jnp.all(state.site_xpos == 0.0)
 
     ell = task.running_cost(state, jnp.zeros(2))

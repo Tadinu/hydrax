@@ -2,7 +2,7 @@ import time
 
 import jax
 import jax.numpy as jnp
-import mujoco
+import mujoco as mj
 from mujoco import mjx
 
 from hydrax.algs import MPPI
@@ -28,7 +28,7 @@ def test_opt_iterations() -> None:
     mj_model = task.mj_model
     mj_model.opt.timestep = 0.005
     mj_model.opt.iterations = 50
-    mj_data = mujoco.MjData(mj_model)
+    mj_data = mj.MjData(mj_model)
 
     mjx_data = mjx.put_data(mj_model, mj_data)
     params = ctrl.init_params()
