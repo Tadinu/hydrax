@@ -18,7 +18,7 @@ def test_task(impl: str) -> None:
     state = task.make_data()
     assert isinstance(state, mjx.Data)
     state = state.replace(mocap_quat=jnp.array([[0.0, 1.0, 0.0, 0.0]]))
-    state = jax.jit(mjx.forward)(task.model, state)
+    state = jax.jit(mjx.forward)(task.mjx_model, state)
 
     pos = task._get_position_err(state)
     assert pos.shape == (3,)

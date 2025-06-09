@@ -3,7 +3,7 @@ from typing import Tuple
 
 import jax
 import jax.numpy as jnp
-import mujoco
+import mujoco as mj
 import pytest
 from mujoco import mjx
 
@@ -16,7 +16,7 @@ def test_mjx_model() -> None:
     """Test that the MJX model runs without crashing."""
     rng = jax.random.key(0)
 
-    mj_model = mujoco.MjModel.from_xml_path(ROOT + "/models/g1/scene.xml")
+    mj_model = mj.MjModel.from_xml_path(ROOT + "/models/g1/scene.xml")
     model = mjx.put_model(mj_model)
     data = mjx.make_data(model)
 
@@ -65,13 +65,13 @@ def test_standup(impl: str) -> None:
     assert isinstance(state, mjx.Data)
 
     # Check sensor measurements
-    state = mjx.forward(task.model, state)
+    state = mjx.forward(task.mjx_model, state)
     pz = task._get_torso_height(state)
     w = task._get_torso_orientation(state)
     assert pz > 0.0
     assert w.shape == (3,)
 
-    ell = task.running_cost(state, jnp.zeros(task.model.nu))
+    ell = task.running_cost(state, jnp.zeros(task.mjx_model.nu))
     assert ell.shape == ()
     assert ell > 0.0
 
@@ -93,7 +93,7 @@ def test_mocap(impl: str) -> None:
     state = task.make_data()
     assert isinstance(state, mjx.Data)
 
-    ell = task.running_cost(state, jnp.zeros(task.model.nu))
+    ell = task.running_cost(state, jnp.zeros(task.mjx_model.nu))
     assert ell.shape == ()
     assert ell > 0.0
     assert ell < 1.0

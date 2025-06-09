@@ -27,7 +27,7 @@ def test_open_loop() -> None:
     jit_opt = jax.jit(opt.optimize)
 
     # Initialize the system state and policy parameters
-    state = mjx.make_data(task.model)
+    state = mjx.make_data(task.mjx_model)
     params = opt.init_params()
 
     for _ in range(20):
@@ -40,7 +40,7 @@ def test_open_loop() -> None:
     tq = jnp.linspace(0.0, opt.plan_horizon - opt.dt, opt.ctrl_steps)
     controls = opt.interp_func(tq, tk, knots)
     states, final_rollout = jax.jit(opt.eval_rollouts)(
-        task.model, state, controls, knots
+        task.mjx_model, state, controls, knots
     )
     theta = states.qpos[0, :, 0]
     theta_dot = states.qvel[0, :, 0]
@@ -95,7 +95,7 @@ def test_sample_knots_shape() -> None:
     knots, updated_params = opt.sample_knots(params)
 
     # Check shape
-    expected_shape = (opt.num_samples, opt.num_knots, task.model.nu)
+    expected_shape = (opt.num_samples, opt.num_knots, task.mjx_model.nu)
     assert knots.shape == expected_shape, (
         f"Expected knots shape {expected_shape}, got {knots.shape}"
     )
@@ -141,7 +141,7 @@ def test_opt_iteration() -> None:
     )
 
     # Test that opt_iteration is reset after optimization
-    state = mjx.make_data(task.model)
+    state = mjx.make_data(task.mjx_model)
     jit_opt = jax.jit(controller.optimize)
     final_params, _ = jit_opt(state, params)
     assert final_params.opt_iteration == 0, (
@@ -170,7 +170,7 @@ def test_update_params() -> None:
     # Create mock rollouts with different costs
     num_samples = opt.num_samples
     num_knots = opt.num_knots
-    nu = task.model.nu
+    nu = task.mjx_model.nu
     ctrl_steps = opt.ctrl_steps
 
     # Create some dummy knots and costs

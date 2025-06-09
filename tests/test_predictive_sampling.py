@@ -34,8 +34,8 @@ def test_predictive_sampling() -> None:
     assert new_params.rng != params.rng
 
     # Roll out the control sequences
-    state = mjx.make_data(task.model)
-    _, rollouts = opt.eval_rollouts(task.model, state, controls, knots)
+    state = mjx.make_data(task.mjx_model)
+    _, rollouts = opt.eval_rollouts(task.mjx_model, state, controls, knots)
 
     assert rollouts.costs.shape == (
         opt.num_samples,
@@ -79,7 +79,7 @@ def test_open_loop() -> None:
     jit_opt = jax.jit(opt.optimize)
 
     # Initialize the system state and policy parameters
-    state = mjx.make_data(task.model)
+    state = mjx.make_data(task.mjx_model)
     params = opt.init_params()
 
     for _ in range(100):
@@ -94,7 +94,7 @@ def test_open_loop() -> None:
     assert total_costs[best_idx] <= 9.0
 
     states, _ = jax.jit(opt.eval_rollouts)(
-        task.model, state, best_ctrl[None], best_knots[None]
+        task.mjx_model, state, best_ctrl[None], best_knots[None]
     )
 
     if __name__ == "__main__":

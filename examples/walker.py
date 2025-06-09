@@ -1,7 +1,7 @@
 import argparse
 from copy import deepcopy
 
-import mujoco
+import mujoco as mj
 
 from hydrax.algs import MPPI, PredictiveSampling
 from hydrax.simulation.deterministic import run_interactive
@@ -60,7 +60,7 @@ else:
 mj_model = deepcopy(task.mj_model)
 mj_model.opt.timestep = 0.005
 mj_model.opt.iterations = 50
-mj_data = mujoco.MjData(mj_model)
+mj_data = mj.MjData(mj_model)
 
 # Run the interactive simulation
 run_interactive(

@@ -32,18 +32,18 @@ class MPPI(SamplingBasedController):
     """
 
     def __init__(
-        self,
-        task: Task,
-        num_samples: int,
-        noise_level: float,
-        temperature: float,
-        num_randomizations: int = 1,
-        risk_strategy: RiskStrategy = None,
-        seed: int = 0,
-        plan_horizon: float = 1.0,
-        spline_type: Literal["zero", "linear", "cubic"] = "zero",
-        num_knots: int = 4,
-        iterations: int = 1,
+            self,
+            task: Task,
+            num_samples: int,
+            noise_level: float,
+            temperature: float,
+            num_randomizations: int = 1,
+            risk_strategy: RiskStrategy = None,
+            seed: int = 0,
+            plan_horizon: float = 1.0,
+            spline_type: Literal["zero", "linear", "cubic"] = "zero",
+            num_knots: int = 4,
+            iterations: int = 1,
     ) -> None:
         """Initialize the controller.
 
@@ -78,7 +78,7 @@ class MPPI(SamplingBasedController):
         self.temperature = temperature
 
     def init_params(
-        self, initial_knots: jax.Array = None, seed: int = 0
+            self, initial_knots: jax.Array = None, seed: int = 0
     ) -> MPPIParams:
         """Initialize the policy parameters."""
         _params = super().init_params(initial_knots, seed)
@@ -92,14 +92,14 @@ class MPPI(SamplingBasedController):
             (
                 self.num_samples,
                 self.num_knots,
-                self.task.model.nu,
+                self.task.mjx_model.nu,
             ),
         )
         controls = params.mean + self.noise_level * noise
         return controls, params.replace(rng=rng)
 
     def update_params(
-        self, params: MPPIParams, rollouts: Trajectory
+            self, params: MPPIParams, rollouts: Trajectory
     ) -> MPPIParams:
         """Update the mean with an exponentially weighted average."""
         costs = jnp.sum(rollouts.costs, axis=1)  # sum over time steps

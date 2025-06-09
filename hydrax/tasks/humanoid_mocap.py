@@ -3,7 +3,7 @@ from typing import Dict, Tuple
 
 import jax
 import jax.numpy as jnp
-import mujoco
+import mujoco as mj
 import numpy as np
 from huggingface_hub import hf_hub_download
 from mujoco import mjx
@@ -69,8 +69,8 @@ class HumanoidMocap(Task):
     """
 
     def __init__(
-        self,
-        reference_filename: str = "Lafan1/mocap/UnitreeG1/walk1_subject1.npz",
+            self,
+            reference_filename: str = "Lafan1/mocap/UnitreeG1/walk1_subject1.npz",
         impl: str = "jax",
         options: HumanoidMocapOptions | None = None,
     ) -> None:
@@ -85,7 +85,7 @@ class HumanoidMocap(Task):
             options: Task options controlling cost weights and domain
                      randomization ranges.
         """
-        mj_model = mujoco.MjModel.from_xml_path(
+        mj_model = mj.MjModel.from_xml_path(
             ROOT + "/models/g1/scene_23dof.xml"
         )
         super().__init__(
@@ -107,7 +107,7 @@ class HumanoidMocap(Task):
         self.reference_fps = npz_file["frequency"]
 
         # Precompute the pose of each body throughout the reference trajectory.
-        mj_data = mujoco.MjData(mj_model)
+        mj_data = mj.MjData(mj_model)
         n_frames = len(reference)
         reference_xpos = np.zeros((n_frames - 1, mj_model.nbody, 3))
         reference_xquat = np.zeros((n_frames - 1, mj_model.nbody, 4))
@@ -377,7 +377,7 @@ class HumanoidMocap(Task):
         }
 
     def domain_randomize_data(
-        self, data: mjx.Data, rng: jax.Array
+            self, data: mjx.Data, rng: jax.Array
     ) -> Dict[str, jax.Array]:
         """Randomly perturb the measured base position and velocities."""
         rng, q_rng, v_rng = jax.random.split(rng, 3)
