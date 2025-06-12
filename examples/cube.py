@@ -3,7 +3,7 @@ import argparse
 import mujoco as mj
 from evosax.algorithms.distribution_based.cma_es import CMA_ES
 
-from hydrax.algs import CEM, MPPI, Evosax, PredictiveSampling
+from hydrax.algs import CEM, ICEM, MPPI, Evosax, PredictiveSampling
 from hydrax.simulation.deterministic import run_interactive
 from hydrax.tasks.cube import CubeRotation
 
@@ -35,6 +35,7 @@ args = parser.parse_args()
 # Define the task (cost and dynamics)
 task = CubeRotation(impl="warp" if args.warp else "jax")
 
+args.algorithm = "icem"
 # Set the controller based on command-line arguments
 if args.algorithm == "ps" or args.algorithm is None:
     print("Running predictive sampling")
@@ -71,6 +72,20 @@ elif args.algorithm == "cem":
         plan_horizon=0.25,
         spline_type="zero",
         num_knots=4,
+    )
+elif args.algorithm == "icem":
+    print("Running ICEM")
+    ctrl = ICEM(
+        task,
+        num_samples=128,
+        num_elites=10,
+        sigma_start=1.0,
+        sigma_min=1.0,
+        num_randomizations=8,
+        plan_horizon=2.0,
+        spline_type="zero",
+        num_knots=4,
+        iterations=1
     )
 elif args.algorithm == "cmaes":
     print("Running CMA-ES")

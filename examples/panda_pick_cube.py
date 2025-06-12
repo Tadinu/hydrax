@@ -3,11 +3,12 @@ import argparse
 import evosax
 import mujoco as mj
 
-from hydrax.algs import CEM, MPPI, Evosax, PredictiveSampling, DIAL
+from hydrax.algs import CEM, ICEM, MPPI, Evosax, PredictiveSampling, DIAL
 from hydrax.simulation.asynchronous import run_interactive as async_run_interactive
 from hydrax.simulation.deterministic import run_interactive as sync_run_interactive
 from hydrax.tasks.panda.panda_open_cabinet_env import PandaOpenCabinetEnv
 from hydrax.tasks.panda.panda_pick_env import PandaPickEnv
+from hydrax.risk import BestCase
 
 # Asynchronous simulations must be wrapped in a __main__ block
 # https://docs.python.org/3/library/multiprocessing.html
@@ -32,7 +33,7 @@ if __name__ == "__main__":
     subparsers.add_parser("cmaes", help="CMA-ES")
     args = parser.parse_args()
 
-    args.algorithm = "cem"
+    args.algorithm = "icem"
     # Set the controller based on command-line arguments
     if args.algorithm == "ps" or args.algorithm is None:
         print("Running predictive sampling")
@@ -61,12 +62,28 @@ if __name__ == "__main__":
         print("Running CEM")
         ctrl = CEM(
             task,
-            num_samples=128,
-            num_elites=5,
+            num_samples=256,
+            num_elites=10,
             sigma_start=0.5,
             sigma_min=0.5,
             num_randomizations=8,
             plan_horizon=2.0,
+            spline_type="zero",
+            num_knots=4,
+            iterations=1
+        )
+    elif args.algorithm == "icem":
+        print("Running ICEM")
+        ctrl = ICEM(
+            task,
+            num_samples=128,
+            num_elites=5,
+            sigma_start=0.5,
+            sigma_min=0.5,
+            num_randomizations=32,
+            explore_fraction=0.5,
+            # risk_strategy=BestCase(),
+            plan_horizon=0.12,
             spline_type="zero",
             num_knots=4,
             iterations=1
