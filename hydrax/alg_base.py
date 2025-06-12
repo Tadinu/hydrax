@@ -142,7 +142,7 @@ class SamplingBasedController(ABC):
         new_mean = self.interp_func(new_tk, tk, params.mean[None, ...])[0]
         params = params.replace(tk=new_tk, mean=new_mean)
 
-        def _optimize_scan_body(params: Any, _: Any):
+        def _optimize_scan_body(params: Any, iteration: Any):
             # Sample random control sequences from spline knots
             knots, params = self.sample_knots(params)
             knots = jnp.clip(
