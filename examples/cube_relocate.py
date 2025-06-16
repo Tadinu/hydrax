@@ -1,27 +1,25 @@
 import argparse
 
+import evosax
 import mujoco as mj
-from evosax.algorithms.distribution_based.cma_es import CMA_ES
 
 from hydrax.algs import CEM, ICEM, MPPI, Evosax, PredictiveSampling
 from hydrax.simulation.deterministic import run_interactive
-from hydrax.tasks.cube import CubeRotation
+from hydrax.tasks.cube_relocate_env import CubeRelocateEnv
 
 """
-Run an interactive simulation of the cube rotation task.
+Run an interactive simulation of the cube relocating task.
 
 Double click on the floating target cube, then change the goal orientation with
 [ctrl + left click].
 """
 
+# Define the task (cost and dynamics)
+task = CubeRelocateEnv()
+
 # Parse command-line arguments
 parser = argparse.ArgumentParser(
     description="Run an interactive simulation of the cube rotation task."
-)
-parser.add_argument(
-    "--warp",
-    action="store_true",
-    help="Whether to use the (experimental) MjWarp backend. (default: False)",
 )
 subparsers = parser.add_subparsers(
     dest="algorithm", help="Sampling algorithm (choose one)"
@@ -31,9 +29,6 @@ subparsers.add_parser("mppi", help="Model Predictive Path Integral Control")
 subparsers.add_parser("cem", help="Cross-Entropy Method")
 subparsers.add_parser("cmaes", help="CMA-ES")
 args = parser.parse_args()
-
-# Define the task (cost and dynamics)
-task = CubeRotation(impl="warp" if args.warp else "jax")
 
 args.algorithm = "cem"
 # Set the controller based on command-line arguments
@@ -72,6 +67,7 @@ elif args.algorithm == "cem":
         plan_horizon=0.25,
         spline_type="zero",
         num_knots=4,
+        explore_fraction=0.3
     )
 elif args.algorithm == "icem":
     print("Running ICEM")
@@ -91,8 +87,9 @@ elif args.algorithm == "cmaes":
     print("Running CMA-ES")
     ctrl = Evosax(
         task,
-        CMA_ES,
+        evosax.Sep_CMA_ES,
         num_samples=128,
+        elite_ratio=0.5,
         num_randomizations=8,
         plan_horizon=0.25,
         spline_type="zero",
