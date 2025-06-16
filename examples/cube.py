@@ -35,7 +35,7 @@ args = parser.parse_args()
 # Define the task (cost and dynamics)
 task = CubeRotation(impl="warp" if args.warp else "jax")
 
-args.algorithm = "icem"
+args.algorithm = "cem"
 # Set the controller based on command-line arguments
 if args.algorithm == "ps" or args.algorithm is None:
     print("Running predictive sampling")

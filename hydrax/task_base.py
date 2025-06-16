@@ -61,9 +61,8 @@ class Task(ABC):
             self.dt = self.mj_model.opt.timestep
 
         # Get site IDs for points we want to trace
-        trace_sites = self.trace_sites or []
         self.trace_site_ids = jnp.array(
-            [self.mj_model.site(name).id for name in trace_sites]
+            [self.mj_model.site(name).id for name in self.trace_sites]
         )
 
     @property

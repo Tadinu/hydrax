@@ -461,7 +461,7 @@ class AdroitHandRelocateEnv(mjx_env.MjxEnv, Task):
         target_mat = data.site_xmat[self._target_obj_site]
         rot_err = jp.linalg.norm(target_mat.ravel()[:6] - box_mat.ravel()[:6])
 
-        box_target = 1 - jp.tanh(5 * (0.9 * pos_err + 0.1 * rot_err))
+        obj_target = 1 - jp.tanh(5 * (0.9 * pos_err + 0.1 * rot_err))
         grasp_obj = 1 - jp.tanh(5 * jp.linalg.norm(box_pos - grasp_pos))
         robot_target_qpos = 1 - jp.tanh(
             jp.linalg.norm(
@@ -485,7 +485,7 @@ class AdroitHandRelocateEnv(mjx_env.MjxEnv, Task):
 
         rewards = {
             "grasp_obj": grasp_obj,
-            "box_target": box_target * info["reached_obj"],
+            "obj_target": obj_target * info["reached_obj"],
             "no_floor_collision": no_floor_collision,
             "robot_target_qpos": robot_target_qpos,
         }

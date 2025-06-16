@@ -33,7 +33,7 @@ if __name__ == "__main__":
     subparsers.add_parser("cmaes", help="CMA-ES")
     args = parser.parse_args()
 
-    args.algorithm = "icem"
+    args.algorithm = "cmaes"
     # Set the controller based on command-line arguments
     if args.algorithm == "ps" or args.algorithm is None:
         print("Running predictive sampling")
