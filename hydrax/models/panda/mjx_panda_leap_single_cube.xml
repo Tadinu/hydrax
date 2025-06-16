@@ -21,7 +21,8 @@
 
   <!-- Sensors for the cube -->
   <sensor>
-    <framepos name="cube_position" objtype="body" objname="box" reftype="site" refname="leap_rh/grasp_site" />
-    <framequat name="cube_orientation" objtype="body" objname="box" reftype="body" refname="mocap_target"/>
+    <framepos name="cube_position" objtype="body" objname="box"/>
+    <framepos name="cube_distance_to_grasp" objtype="body" objname="box" reftype="site" refname="leap_rh/grasp_site"/>
+    <framequat name="cube_orientation_from_target" objtype="body" objname="box" reftype="body" refname="mocap_target"/>
   </sensor>
 </mujoco>
