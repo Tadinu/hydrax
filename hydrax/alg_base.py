@@ -244,13 +244,15 @@ class SamplingBasedController(ABC):
         """
 
         def _scan_fn(
-                x: mjx.Data, u: jax.Array
+                x: mjx.Data, u: jax.Array,
         ) -> Tuple[mjx.Data, Tuple[mjx.Data, jax.Array, jax.Array]]:
             """Compute the cost and observation, then advance the state."""
             x = x.replace(ctrl=u)
             x = mjx.step(model, x)  # step model + compute site positions
             cost = self.dt * self.task.running_cost(x, u)
             sites = self.task.get_trace_sites(x)
+            next_phase = self.task.next_phase(x)
+            x = x.replace(userdata=jnp.array([next_phase], dtype=jnp.float32))
             return x, (x, cost, sites)
 
         final_state, (states, costs, trace_sites) = jax.lax.scan(

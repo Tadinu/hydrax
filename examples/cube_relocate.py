@@ -67,7 +67,7 @@ elif args.algorithm == "cem":
         plan_horizon=0.25,
         spline_type="zero",
         num_knots=4,
-        explore_fraction=0.3
+        # explore_fraction=0.3
     )
 elif args.algorithm == "icem":
     print("Running ICEM")
