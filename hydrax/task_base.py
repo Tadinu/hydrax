@@ -73,6 +73,9 @@ class Task(ABC):
     def mjx_model(self) -> mjx.Model:
         return self._mjx_model
 
+    def next_phase(self, state: mjx.Data) -> jnp.int32:
+        return 0
+
     @abstractmethod
     def running_cost(self, state: mjx.Data, control: jax.Array) -> jax.Array:
         """The running cost ℓ(xₜ, uₜ).

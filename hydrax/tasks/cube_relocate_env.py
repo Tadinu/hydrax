@@ -1,8 +1,9 @@
-from typing import Dict, Optional
+from typing import Any, Dict, Optional, Callable, Union
+from enum import IntEnum
 
 import numpy as np
 import jax
-import jax.numpy as jp
+import jax.numpy as jnp
 import mujoco as mj
 from mujoco import mjx
 
@@ -10,6 +11,13 @@ from hydrax import ROOT
 from hydrax.task_base import Task
 
 HAND_BASE_POSE = [np.array([-0.25, 0.0, 0.25]), np.array([0.0, 1.0, 0.0, 0.0])]
+
+
+class RelocatePhase(IntEnum):
+    INITIAL = 0
+    REACHING = 1
+    GRASPING = 2
+    RELOCATING = 3
 
 
 class CubeRelocateEnv(Task):
@@ -39,12 +47,19 @@ class CubeRelocateEnv(Task):
         self.cube_orientation_from_target_sensor = mj.mj_name2id(
             mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_orientation_from_target"
         )
+        self.grasp_distance_from_target_sensor = mj.mj_name2id(
+            mj_model, mj.mjtObj.mjOBJ_SENSOR, "grasp_orientation_from_target"
+        )
         self.finger_tip_position_sensors = [mj.mj_name2id(
             mj_model, mj.mjtObj.mjOBJ_SENSOR, f"{fi}_tip_position") for fi in ["th", "if", "mf", "rf"]
         ]
 
         # Distance (m) beyond which we impose a high cube position cost
-        self.threshold = 0.015
+        self.grasp_threshold = 0.01  # 0.015
+        self.target_distance_threshold = 0.001
+
+        # Task phase
+        self.phase: RelocatePhase = RelocatePhase.INITIAL
 
     def _post_init(self, obj_name: Optional[str] = None, keyframe: Optional[str] = None):
         Task._post_init(self, obj_name, keyframe)
@@ -60,7 +75,7 @@ class CubeRelocateEnv(Task):
         position_adr = self.mjx_model.sensor_adr[self.cube_position_sensor]
         return state.sensordata[position_adr: position_adr + 3]
 
-    def _get_cube_distance_from_target_sensor(self, state: mjx.Data) -> jax.Array:
+    def _get_cube_distance_from_target_err(self, state: mjx.Data) -> jax.Array:
         """Position of the cube relative to the target."""
         position_adr = self.mjx_model.sensor_adr[self.cube_distance_from_target_sensor]
         return state.sensordata[position_adr: position_adr + 3]
@@ -76,15 +91,20 @@ class CubeRelocateEnv(Task):
         cube_quat = state.sensordata[sensor_adr: sensor_adr + 4]
 
         # Quaternion subtraction gives us rotation relative to goal
-        goal_quat = jp.array([1.0, 0.0, 0.0, 0.0])
+        goal_quat = jnp.array([1.0, 0.0, 0.0, 0.0])
         return mjx._src.math.quat_sub(cube_quat, goal_quat)
+
+    def _get_grasp_distance_from_target_err(self, state: mjx.Data) -> jax.Array:
+        """Position of the cube relative to the target."""
+        position_adr = self.mjx_model.sensor_adr[self.grasp_distance_from_target_sensor]
+        return state.sensordata[position_adr: position_adr + 3]
 
     def _get_finger_tips_distance_from_obj(self, state):
         """Distance of the finger tips from the object."""
         sensor_adrs = [self.mjx_model.sensor_adr[s] for s in self.finger_tip_position_sensors]
-        d = jp.zeros(1)
+        d = jnp.zeros(1)
         for sensor_adr in sensor_adrs:
-            d += jp.sum(jp.square(state.sensordata[sensor_adr: sensor_adr + 3]))
+            d += jnp.sum(jnp.square(state.sensordata[sensor_adr: sensor_adr + 3]))
         return d
 
     @staticmethod
@@ -93,49 +113,91 @@ class CubeRelocateEnv(Task):
         mask = jax.nn.sigmoid((eps - err) * steep)
         return mask * (1.0 / x) ** 2
 
-    def running_cost(self, state: mjx.Data, control: jax.Array) -> jax.Array:
-        """The running cost ℓ(xₜ, uₜ)."""
+    def is_reaching(self, state: mjx.Data) -> Any:
+        return self.phase == RelocatePhase.REACHING and not self.is_in_object_proximity(state)
+
+    def is_in_object_proximity(self, state: mjx.Data) -> Any:
         grasp_position_err = self._get_cube_distance_from_grasp_err(state)
-        grasp_squared_distance = jp.sum(jp.square(grasp_position_err[0:2]))
+        grasp_squared_distance = jnp.sum(jnp.square(grasp_position_err[0:2]))
         # [0:2]ignore z since it can never be fully close to 0 spatially (3D)
-        grasp_proximity = grasp_squared_distance - self.threshold ** 2
-        grasp_position_cost = 0.1 * grasp_squared_distance + 100 * jp.maximum(grasp_proximity, 0.0)
+        return grasp_squared_distance > self.grasp_threshold ** 2
+
+    def is_relocating(self, state: mjx.Data) -> Any:
+        target_distance_err = self._get_cube_distance_from_target_err(state)
+        target_squared_distance = jnp.sum(jnp.square(target_distance_err))
+        return (~self.is_reaching(state)) & (target_squared_distance > self.grasp_threshold ** 2)
+
+    def next_phase(self, state: mjx.Data) -> jnp.int32:
+        is_near_object = jnp.any(self.is_in_object_proximity(state))
+        phase = state.userdata[0].astype(jnp.int32)
+        return jax.lax.select(phase == RelocatePhase.INITIAL, RelocatePhase.REACHING,
+                              jax.lax.select((phase == RelocatePhase.RELOCATING) & is_near_object,
+                                             RelocatePhase.GRASPING,
+                                             jax.lax.select(
+                                                 (phase == RelocatePhase.GRASPING) & (~is_near_object),
+                                                 RelocatePhase.RELOCATING,
+                                                 jax.lax.select(is_near_object,
+                                                                RelocatePhase.GRASPING,
+                                                                phase))))
+
+    @classmethod
+    def get_cost(cls, cond: Callable, right_value: jnp.float32, wrong_value: jnp.float32) -> Any:
+        return jax.lax.cond(
+            cond(),
+            lambda args: right_value,
+            lambda args: wrong_value,
+            right_value
+        )
+
+    def grasp_position_cost(self, state: mjx.Data, control: jax.Array) -> jax.Array:
+        grasp_position_err = self._get_cube_distance_from_grasp_err(state)
+        grasp_squared_distance = jnp.sum(jnp.square(grasp_position_err[0:2]))
+        # [0:2]ignore z since it can never be fully close to 0 spatially (3D)
+        grasp_proximity = grasp_squared_distance - self.grasp_threshold ** 2
+        grasp_position_cost = 0.1 * grasp_squared_distance + 100 * jnp.maximum(grasp_proximity, 0.0)
 
         grasp_orientation_err = self._get_cube_orientation_from_target_err(state)
-        grasp_orientation_cost = jp.sum(jp.square(grasp_orientation_err))
-
-        target_distance_err = self._get_cube_distance_from_target_sensor(state)
-        target_squared_distance = jp.sum(jp.square(target_distance_err))
-        target_proximity = target_squared_distance - self.threshold ** 2
-        target_distance_cost = target_squared_distance + 100 * jp.maximum(target_proximity, 0.0)
+        grasp_orientation_cost = jnp.sum(jnp.square(grasp_orientation_err))
 
         k_grasp = 0.001
-        grasp_control_cost = k_grasp * jp.sum(jp.square(control))
+        grasp_control_cost = k_grasp * jnp.sum(jnp.square(control))
+        return grasp_position_cost + grasp_orientation_cost + grasp_control_cost
 
+    def bring_to_target_cost(self, state: mjx.Data, control: jax.Array) -> jax.Array:
         fingers_squared_distance = self._get_finger_tips_distance_from_obj(state)
-        fingers_distance_cost = 100 * fingers_squared_distance
-        # hover_cost = jax.lax.cond(
-        #    grasp_proximity < 0.0,
-        #    lambda args: args[0],
-        #    lambda args: 0.0,
-        #    (10.0 / jp.square(self._get_cube_position(state)[2]),)
-        # )
+        fingers_distance_cost = 10000 * fingers_squared_distance
+
+        # self._get_cube_distance_from_target_err(state)
+        target_distance_err = self._get_grasp_distance_from_target_err(state)
+        target_squared_distance = jnp.sum(jnp.square(target_distance_err))
+        target_proximity = target_squared_distance - self.target_distance_threshold ** 2
+        target_distance_cost = 0.1 * target_squared_distance + 100 * jnp.maximum(target_proximity, 0.0)
 
         # smooth_sigmoid(self._get_cube_position(state)[2], squared_distance, 0.005)
-        # squared_proximity_from_ground = 1.0 / jp.square(self._get_cube_position(state)[2])
-        # hover_cost = 0.1 * squared_proximity_from_ground + 100 * jp.maximum(
+        # squared_proximity_from_ground = 1.0 / jnp.square(self._get_cube_position(state)[2])
+        # hover_cost = 0.1 * squared_proximity_from_ground + 100 * jnp.maximum(
         #    squared_proximity_from_ground - self.threshold ** 2, 0.0
         # )
-        return (grasp_position_cost + grasp_orientation_cost + grasp_control_cost + target_distance_cost
-                + fingers_distance_cost)
+        return target_distance_cost + fingers_distance_cost
 
-    def terminal_cost(self, state: mjx.Data) -> jax.Array:
+    def running_cost(self, state: mjx.Data, control: jax.Array) -> jax.Array:
+        """The running cost ℓ(xₜ, uₜ)."""
+        phase = state.userdata[0].astype(jnp.int32)
+        return jax.lax.select((phase == RelocatePhase.REACHING) | (phase == RelocatePhase.GRASPING),
+                              jnp.array([self.grasp_position_cost(state, control)], dtype=jnp.float32),
+                              jax.lax.select(phase == RelocatePhase.RELOCATING,
+                                             self.bring_to_target_cost(state, control),
+                                             jnp.array([100000000.0], dtype=jnp.float32)))
+
+    def terminal_cost(self, state: mjx.Data) -> Union[jax.Array, Any]:
         """The terminal cost ϕ(x_T)."""
-        position_err = self._get_cube_distance_from_grasp_err(state)
-        distance_err = self._get_cube_distance_from_target_sensor(state)
-        fingers_distance_err = self._get_finger_tips_distance_from_obj(state)
-        return (100 * jp.sum(jp.square(position_err)) + 100 * jp.sum(jp.square(distance_err))
-                + fingers_distance_err)
+        phase = state.userdata[0].astype(jnp.int32)
+        grasp_distance_cost = 100 * jnp.sum(jnp.square(self._get_cube_distance_from_grasp_err(state)))
+        return jax.lax.select((phase == RelocatePhase.REACHING) | (phase == RelocatePhase.GRASPING),
+                              grasp_distance_cost,
+                              jnp.reshape(100 * jnp.sum(jnp.square(self._get_cube_distance_from_target_err(
+                                  state))) + 10000 * self._get_finger_tips_distance_from_obj(state),
+                                          grasp_distance_cost.shape))
 
     def domain_randomize_model(self, rng: jax.Array) -> Dict[str, jax.Array]:
         """Randomize the friction parameters."""
