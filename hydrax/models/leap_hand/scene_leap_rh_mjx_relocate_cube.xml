@@ -3,6 +3,7 @@
   <include file="../cube/reorientation_cube.xml"/>
 
   <statistic center="0.15 0 0" extent="0.4" meansize="0.01"/>
+  <size nuserdata="1"/>
 
   <visual>
     <headlight diffuse=".8 .8 .8" ambient=".2 .2 .2" specular="1 1 1"/>
@@ -36,8 +37,8 @@
 
   <actuator>
     <general name="LRTx" joint="LRTx" ctrlrange="-0.25 0.25" biastype="affine" gainprm="500 0 0" biasprm="0 -200 0" />
-    <general name="LRTy" joint="LRTy" ctrlrange="0.0 0.2" biastype="affine" gainprm="500 0 0" biasprm="0 -200 0" />
-    <general name="LRTz" joint="LRTz" ctrlrange="-0.3 0.5" biastype="affine" gainprm="500 0 0" biasprm="0 -200 0" />
+    <general name="LRTy" joint="LRTy" ctrlrange="-0.25 0.25" biastype="affine" gainprm="500 0 0" biasprm="0 -200 0" />
+    <general name="LRTz" joint="LRTz" ctrlrange="-0.5 0.5" biastype="affine" gainprm="500 0 0" biasprm="0 -200 0" />
     <!--
     <general name="LRRx" joint="LRRx" ctrlrange="-.75 .75" biastype="affine" gainprm="500 0 0" biasprm="0 -200 0" />
     <general name="LRRy" joint="LRRy" ctrlrange="-.75 .75" biastype="affine" gainprm="500 0 0" biasprm="0 -200 0" />
@@ -51,6 +52,7 @@
     <framepos name="cube_distance_to_grasp" objtype="body" objname="cube" reftype="site" refname="grasp_site" />
     <framepos name="cube_distance_from_target" objtype="body" objname="cube" reftype="body" refname="target"/>
     <framequat name="cube_orientation_from_target" objtype="body" objname="cube" reftype="body" refname="target"/>
+    <framepos name="grasp_distance_from_target" objtype="site" objname="grasp_site" reftype="body" refname="target"/>
     <framelinvel name="cube_linvel" objtype="body" objname="cube"/>
     <frameangvel name="cube_angvel" objtype="body" objname="cube"/>
     <frameangacc name="cube_angacc" objtype="body" objname="cube"/>

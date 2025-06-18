@@ -124,8 +124,8 @@
     <light name="spotlight" mode="targetbodycom" target="palm" pos="3 0 4"/>
     <body name="leap_mount" pos="0 0 0.3" quat="1 0 0 0" childclass="leap_rh" gravcomp="1">
       <joint name="LRTx" pos="0 0 0" axis="1 0 0" type="slide" range="-0.25 0.25" damping="1" />
-      <joint name="LRTy" pos="0 0 0" axis="0 1 0" type="slide" range="0 0.2" damping="1" />
-      <joint name="LRTz" pos="0 0 0" axis="0 0 1" type="slide" range="-0.3 0.5" damping="1" />
+      <joint name="LRTy" pos="0 0 0" axis="0 1 0" type="slide" range="-0.25 0.25" damping="1" />
+      <joint name="LRTz" pos="0 0 0" axis="0 0 1" type="slide" range="-0.5 0.5" damping="1" />
       <!--
       <joint name="LRRx" pos="0 0 0" axis="1 0 0" range="-.75 .75" damping="1" />
       <joint name="LRRy" pos="0 0 0" axis="0 1 0" range="-.75 .75" damping="1" />
