@@ -14,7 +14,7 @@ class CubeRotation(Task):
 
     def __init__(self) -> None:
         """Load the MuJoCo model and set task parameters."""
-        mj_model = mj.MjModel.from_xml_path(ROOT + "/models/cube/scene.xml")
+        mj_model = mj.MjModel.from_xml_path(ROOT + "/models/leap_hand/scene_leap_rh_rotate_cube.xml")
         super().__init__(
             mj_model,
             trace_sites=["cube_center", "if_tip", "mf_tip", "rf_tip", "th_tip"],
