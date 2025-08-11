@@ -80,7 +80,8 @@ def run_interactive(  # noqa: PLR0912, PLR0915
     )
 
     # Initialize the controller
-    mjx_data = mjx.put_data(mj_model, mj_data)
+    mjx_data = mjx.put_data(mj_model, mj_data, impl='warp') if controller.task.warp_enabled \
+        else mjx.put_data(mj_model, mj_data)
     mjx_data = mjx_data.replace(
         mocap_pos=mj_data.mocap_pos, mocap_quat=mj_data.mocap_quat
     )

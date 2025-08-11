@@ -23,6 +23,7 @@ class Task(ABC):
             self,
             mj_model: Optional[mj.MjModel] = None,
             trace_sites: Optional[Sequence[str]] = None,
+            warp_enabled: Optional[bool] = False,
     ) -> None:
         """Set the model and simulation parameters.
 
@@ -34,10 +35,11 @@ class Task(ABC):
               Newton iterations, etc., are set in the model itself.
         """
         self.trace_sites = trace_sites
+        self.warp_enabled = warp_enabled
         if mj_model is not None:
             assert isinstance(mj_model, mj.MjModel)
             self._mj_model = mj_model
-            self._mjx_model = mjx.put_model(mj_model)
+            self._mjx_model = mjx.put_model(mj_model, impl='warp') if warp_enabled else mjx.put_model(mj_model)
             self._post_init()
 
     def _post_init(self, obj_name: Optional[str] = None, keyframe: Optional[str] = None) -> None:
