@@ -23,7 +23,7 @@ class Task(ABC):
             self,
             mj_model: Optional[mj.MjModel] = None,
             trace_sites: Optional[Sequence[str]] = None,
-        impl: str = "jax",
+        impl: str = "warp",
     ) -> None:
         """Set the model and simulation parameters.
 
@@ -37,6 +37,7 @@ class Task(ABC):
               Newton iterations, etc., are set in the model itself.
         """
         self.trace_sites = trace_sites
+        self.warp_enabled = (impl == 'warp')
         if mj_model is not None:
             assert isinstance(mj_model, mj.MjModel)
             self._mj_model = mj_model
