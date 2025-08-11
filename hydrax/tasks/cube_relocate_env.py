@@ -55,7 +55,7 @@ class CubeRelocateEnv(Task):
         ]
 
         # Distance (m) beyond which we impose a high cube position cost
-        self.grasp_threshold = 0.01  # 0.015
+        self.grasp_threshold = 0.015  # 0.015
         self.target_distance_threshold = 0.001
 
         # Task phase
@@ -182,6 +182,21 @@ class CubeRelocateEnv(Task):
 
     def running_cost(self, state: mjx.Data, control: jax.Array) -> jax.Array:
         """The running cost ℓ(xₜ, uₜ)."""
+        position_err = self._get_cube_distance_from_grasp_err(state)
+        squared_distance = jnp.sum(jnp.square(position_err[0:2]))  # ignore z
+        position_cost = 0.1 * squared_distance + 100 * jnp.maximum(
+            squared_distance - self.grasp_threshold ** 2, 0.0
+        )
+
+        orientation_err = self._get_cube_orientation_from_target_err(state)
+        orientation_cost = jnp.sum(jnp.square(orientation_err))
+
+        grasp_cost = 0.001 * jnp.sum(jnp.square(control))
+
+        return position_cost + orientation_cost + grasp_cost
+
+    def running_relocate_cost(self, state: mjx.Data, control: jax.Array) -> jax.Array:
+        """The running cost ℓ(xₜ, uₜ)."""
         phase = state.userdata[0].astype(jnp.int32)
         return jax.lax.select((phase == RelocatePhase.REACHING) | (phase == RelocatePhase.GRASPING),
                               jnp.array([self.grasp_position_cost(state, control)], dtype=jnp.float32),
@@ -189,7 +204,12 @@ class CubeRelocateEnv(Task):
                                              self.bring_to_target_cost(state, control),
                                              jnp.array([100000000.0], dtype=jnp.float32)))
 
-    def terminal_cost(self, state: mjx.Data) -> Union[jax.Array, Any]:
+    def terminal_cost(self, state: mjx.Data) -> jax.Array:
+        """The terminal cost ϕ(x_T)."""
+        position_err = self._get_cube_distance_from_grasp_err(state)
+        return 100 * jnp.sum(jnp.square(position_err))
+
+    def terminal_relocate_cost(self, state: mjx.Data) -> Union[jax.Array, Any]:
         """The terminal cost ϕ(x_T)."""
         phase = state.userdata[0].astype(jnp.int32)
         grasp_distance_cost = 100 * jnp.sum(jnp.square(self._get_cube_distance_from_grasp_err(state)))
