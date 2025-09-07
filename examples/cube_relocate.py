@@ -1,8 +1,8 @@
 import argparse
 
-import evosax
 import mujoco as mj
 
+from evosax.algorithms.distribution_based import Sep_CMA_ES
 from hydrax.algs import CEM, ICEM, MPPI, Evosax, PredictiveSampling
 from hydrax.simulation.deterministic import run_interactive
 from hydrax.tasks.cube_relocate_env import CubeRelocateEnv
@@ -87,9 +87,9 @@ elif args.algorithm == "cmaes":
     print("Running CMA-ES")
     ctrl = Evosax(
         task,
-        evosax.Sep_CMA_ES,
+        Sep_CMA_ES,
         num_samples=128,
-        elite_ratio=0.5,
+        # elite_ratio=0.5,
         num_randomizations=8,
         plan_horizon=0.25,
         spline_type="zero",
