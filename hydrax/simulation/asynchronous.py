@@ -10,6 +10,7 @@ import numpy as np
 from mujoco import mjx
 
 from hydrax.alg_base import SamplingBasedController
+from mjmanip.utils import convert_wrist_to_arm_ctrl
 
 """
 Utilities for asynchronous simulation, with the simulator and controller running
@@ -87,7 +88,12 @@ class SharedMemoryMujocoData:
         self.ctrl = SharedMemoryNumpyArray(
             np.zeros(mj_data.ctrl.shape, dtype=np.float32), ctx
         )
-
+        self.wrist_ctrl = SharedMemoryNumpyArray(
+            np.zeros((6,), dtype=np.float32), ctx
+        )
+        self.hand_ctrl = SharedMemoryNumpyArray(
+            np.zeros((16,), dtype=np.float32), ctx
+        )
         if len(mj_data.mocap_pos) > 0:
             self.mocap_pos = SharedMemoryNumpyArray(
                 np.array(mj_data.mocap_pos, dtype=np.float32), ctx
@@ -159,9 +165,12 @@ def run_controller(
         policy_params = jit_optimize(mjx_data, policy_params)
 
         # Send the action to the simulator.
-        shm_data.ctrl[:] = np.array(
-            get_action(policy_params, mjx_data.time), dtype=np.float32
-        )
+        action = get_action(policy_params, mjx_data.time)
+        if action.shape == shm_data.ctrl[:].shape:
+            shm_data.ctrl[:] = np.array(action, dtype=np.float32)
+        else:
+            shm_data.wrist_ctrl[:] = np.array(action[:6], dtype=np.float32)
+            shm_data.hand_ctrl[:] = np.array(action[6:], dtype=np.float32)
 
         # Print the current planning frequency
         print(
@@ -206,9 +215,19 @@ def run_simulator(
             # Read the lastest control values from shared memory
             # TODO: actually query the spline rather than assuming zero-order
             # hold and a sufficiently high control rate
-            mj_data.ctrl[:] = shm_data.ctrl[:]
+            if shm_data.ctrl[:].any():
+                mj_data.ctrl[:] = shm_data.ctrl[:]
+            else:
+                mj_data.ctrl[7:] = shm_data.hand_ctrl[:]
+                mj_data.ctrl[:7] = convert_wrist_to_arm_ctrl(mj_model, mj_data, shm_data.wrist_ctrl[:])
 
-            # Step the simulation
+                qpos = mj_data.qpos.copy()
+                qvel = np.zeros_like(mj_data.qvel)
+                qvel[:7] = mj_data.ctrl[:7]
+                mj.mj_integratePos(mj_model, qpos, qvel, mj_model.opt.timestep)
+                mj_data.ctrl[:7] = qpos[:7]
+
+                # Step the simulation
             mj.mj_step(mj_model, mj_data)
             viewer.sync()
 

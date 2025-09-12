@@ -59,6 +59,7 @@ class PandaBaseEnv(mjx_env.MjxEnv, Task):
             config: config_dict.ConfigDict,
             config_overrides: Optional[Dict[str, Union[str, int, list[Any]]]] = None,
             xml_path: Optional[epath.Path] = None,
+            use_ctrl_callback: bool = False,
             trace_sites: Optional[Sequence[str]] = None
     ):
         super().__init__(config, config_overrides)
@@ -75,6 +76,7 @@ class PandaBaseEnv(mjx_env.MjxEnv, Task):
             self._mj_model.opt.timestep = self.sim_dt
             self._mjx_model = mjx.put_model(self._mj_model)
         self._action_scale = config.action_scale
+        self.use_ctrl_callback = use_ctrl_callback
 
         self.ARM_JOINTS = [
             "joint1",
@@ -87,8 +89,21 @@ class PandaBaseEnv(mjx_env.MjxEnv, Task):
         ]
         self.HAND_JOINTS = ["finger_joint1", "finger_joint2"]
 
+        # NOTE: Obj name must be init here & same as in xml for correct keyframe definition, required for spec compiling
+        self._obj_name: str = "cube"
+
     def _post_init(self, obj_name: Optional[str] = None, keyframe: Optional[str] = None):
-        Task._post_init(self, obj_name, keyframe)
+        # Init u_min, u_max
+        if self.use_ctrl_callback:
+            self.u_min = np.concatenate([np.array([-1] * 3 + [-1.57] * 3),
+                                         self.mj_model.actuator_ctrlrange[7:, 0]])
+            self.u_max = np.concatenate([np.array([1] * 3 + [1.57] * 3),
+                                         self.mj_model.actuator_ctrlrange[7:, 1]])
+            self.num_ctrls = self.u_min.size
+
+        self.trace_sites += [obj_name]
+        Task._post_init(self, obj_name, keyframe)  # Init [u_min, u_max] here if not yet, so run later
+        self._obj_name = obj_name
 
         # Robot-specifics
         all_joints = self.ARM_JOINTS + self.HAND_JOINTS
@@ -112,7 +127,7 @@ class PandaBaseEnv(mjx_env.MjxEnv, Task):
         self._obj_qposadr = self._mj_model.jnt_qposadr[
             self._mj_model.body(obj_name).jntadr[0]
         ]
-        self._mocap_target = self._mj_model.body("mocap_target").mocapid
+        self._mocap_target = self._mj_model.body("target").mocapid
         self._floor_geom = self._mj_model.geom("floor").id
         self._init_q = self._mj_model.keyframe(keyframe).qpos
         self._init_obj_pos = jp.array(

@@ -1,10 +1,14 @@
 from abc import ABC, abstractmethod
 from functools import partial
-from typing import Any, Literal, Tuple
+from typing import Any, Callable, Literal, Tuple, Optional
+
+import numpy as np
 
 import jax
 import jax.numpy as jnp
 from flax.struct import dataclass
+
+import mujoco as mj
 from mujoco import mjx
 
 from hydrax.risk import AverageCost, RiskStrategy
@@ -64,6 +68,7 @@ class SamplingBasedController(ABC):
             spline_type: Literal["zero", "linear", "cubic"] = "zero",
             num_knots: int = 4,
             iterations: int = 1,
+            ctrl_callback: Optional[Callable[[mjx.Data, jax.Array], jax.Array]] = None
     ) -> None:
         """Initialize the MPC controller.
 
@@ -81,6 +86,7 @@ class SamplingBasedController(ABC):
         self.task = task
         self.num_ctrls = task.num_ctrls
         self.num_randomizations = max(num_randomizations, 1)
+        self.ctrl_callback = ctrl_callback
 
         # Risk strategy defaults to average cost
         if risk_strategy is None:
@@ -248,9 +254,10 @@ class SamplingBasedController(ABC):
                 x: mjx.Data, u: jax.Array,
         ) -> Tuple[mjx.Data, Tuple[mjx.Data, jax.Array, jax.Array]]:
             """Compute the cost and observation, then advance the state."""
-            x = x.replace(ctrl=u)
+            ctrl = self.ctrl_callback(x, u) if self.ctrl_callback else u
+            x = x.replace(ctrl=ctrl)
             x = mjx.step(model, x)  # step model + compute site positions
-            cost = self.dt * self.task.running_cost(x, u)
+            cost = self.dt * self.task.running_cost(x, ctrl)
             sites = self.task.get_trace_sites(x)
             next_phase = self.task.next_phase(x)
             x = x.replace(userdata=jnp.array([next_phase], dtype=jnp.float32))
