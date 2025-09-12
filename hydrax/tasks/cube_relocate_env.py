@@ -121,7 +121,6 @@ class CubeRelocateEnv(Task):
         # Quaternion subtraction gives us rotation relative to goal
         goal_relative_quat = jnp.array([1.0, 0.0, 0.0, 0.0])
         return jnp.sum(jnp.square(mjx._src.math.quat_sub(cube_relative_to_target_quat, goal_relative_quat)))
-        # return cube_relative_to_target_quat))
 
     def _get_grasp_distance_from_target(self, state: mjx.Data) -> jax.Array:
         """Position of the cube relative to the target."""
