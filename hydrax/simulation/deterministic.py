@@ -8,9 +8,13 @@ import mujoco as mj
 import mujoco.viewer
 import numpy as np
 
+# hydrax
 from hydrax import ROOT
 from hydrax.alg_base import SamplingBasedController
 from hydrax.utils.video import VideoRecorder
+
+# mjmanip
+from mjmanip.utils import convert_wrist_to_arm_ctrl
 
 """
 Tools for deterministic (synchronous) simulation, with the simulator and
@@ -167,6 +171,7 @@ def run_interactive(  # noqa: PLR0912, PLR0915
                 mj_model, ref_data, vopt, pert, catmask, viewer.user_scn
             )
 
+        grasp_site = "leap_rh/grasp_site"
         while viewer.is_running():
             start_time = time.time()
 
@@ -228,7 +233,15 @@ def run_interactive(  # noqa: PLR0912, PLR0915
 
             # simulate the system between spline replanning steps
             for i in range(sim_steps_per_replan):
-                mj_data.ctrl[:] = np.array(us[i])
+                if us[i].shape == mj_data.ctrl.shape:
+                    mj_data.ctrl[:] = us[i]
+                else:
+                    qvel = np.zeros_like(mj_data.qvel)
+                    qvel[:7] = convert_wrist_to_arm_ctrl(mj_model, mj_data, us[i, :6], grasp_site)
+                    qvel[7:mj_data.ctrl.size] = us[i, 6:]
+                    qpos = mj_data.qpos.copy()
+                    mj.mj_integratePos(mj_model, qpos, qvel, mj_model.opt.timestep)
+                    mj_data.ctrl[:] = qpos[:mj_data.ctrl.size]
                 mj.mj_step(mj_model, mj_data)
                 viewer.sync()
 

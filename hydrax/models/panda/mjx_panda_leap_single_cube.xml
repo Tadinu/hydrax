@@ -1,29 +1,31 @@
 <mujoco model="panda single cube">
   <include file="mjx_scene.xml"/>
-
-  <default>
-    <default class="cube">
-      <geom friction="0.3 0.05 0.01" conaffinity="2" />
-    </default>
-  </default>
+  <include file="../cube/reorientation_cube.xml"/>
 
   <worldbody>
-    <body name="box" pos="0.5 0 0.03">
-      <freejoint/>
-      <geom type="box" name="box" size="0.02 0.02 0.03" condim="3"
-       friction="1 .03 .003" rgba="0 1 0 1" contype="2" conaffinity="1" solref="0.01 1"/>
-      <site name="box"/>
-    </body>
-    <body mocap="true" name="mocap_target" pos="0.3 0.0 0.2" quat="0 0 0.707107 0.707107">
-      <geom type="box" size="0.02 0.02 0.03" rgba="1 0 0 0.2" contype="0" conaffinity="0"/>
+    <body name="target" mocap="true" pos="0.325 0.17 0.4">
+      <geom type="box" size=".035 .035 .07" mass=".108" material="cube" contype="0" conaffinity="0" group="2"/>
     </body>
   </worldbody>
 
   <!-- Sensors for the cube -->
   <sensor>
-    <framepos name="cube_position" objtype="body" objname="box"/>
-    <framepos name="cube_distance_to_grasp" objtype="body" objname="box" reftype="site" refname="leap_rh/grasp_site"/>
-    <framequat name="cube_orientation_from_target" objtype="body" objname="box" reftype="body" refname="mocap_target"/>
-    <framequat name="grasp_orientation_from_target" objtype="body" objname="box" reftype="body" refname="mocap_target"/>
+    <framepos name="cube_position" objtype="body" objname="cube"/>
+    <contact name="cube_contact_with_palm" geom1="cube" geom2="leap_rh/palm_visual" data="found force"/>
+    <contact name="cube_contact_with_th_tip" geom1="cube" geom2="leap_rh/th_tip" data="found force"/>
+    <contact name="cube_contact_with_if_tip" geom1="cube" geom2="leap_rh/if_tip" data="found force"/>
+    <contact name="cube_contact_with_mf_tip" geom1="cube" geom2="leap_rh/mf_tip" data="found force"/>
+    <contact name="cube_contact_with_rf_tip" geom1="cube" geom2="leap_rh/rf_tip" data="found force"/>
+    <framepos name="cube_distance_to_grasp" objtype="body" objname="cube" reftype="site" refname="leap_rh/grasp_site" />
+    <framepos name="cube_distance_to_target" objtype="body" objname="cube" reftype="body" refname="target"/>
+    <framequat name="cube_orientation_from_target" objtype="body" objname="cube" reftype="body" refname="target"/>
+
+    <!-- hand. -->
+    <framepos name="palm_position" objtype="site" objname="leap_rh/grasp_site"/>
+    <framepos name="th_tip_distance_to_cube" objtype="site" objname="leap_rh/th_tip" reftype="body" refname="cube"/>
+    <framepos name="if_tip_distance_to_cube" objtype="site" objname="leap_rh/if_tip" reftype="body" refname="cube"/>
+    <framepos name="mf_tip_distance_to_cube" objtype="site" objname="leap_rh/mf_tip" reftype="body" refname="cube"/>
+    <framepos name="rf_tip_distance_to_cube" objtype="site" objname="leap_rh/rf_tip" reftype="body" refname="cube"/>
+
   </sensor>
 </mujoco>

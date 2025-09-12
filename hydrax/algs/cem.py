@@ -1,8 +1,10 @@
-from typing import Literal, Tuple, Optional
+from typing import Callable, Literal, Tuple, Optional
 
 import jax
 import jax.numpy as jnp
 from flax.struct import dataclass
+
+from mujoco import mjx
 
 from hydrax.alg_base import SamplingBasedController, SamplingParams, Trajectory
 from hydrax.risk import RiskStrategy
@@ -41,6 +43,7 @@ class CEM(SamplingBasedController):
             spline_type: Literal["zero", "linear", "cubic"] = "zero",
             num_knots: int = 4,
             iterations: int = 1,
+            ctrl_callback: Optional[Callable[[mjx.Data, jax.Array], jax.Array]] = None
     ) -> None:
         """Initialize the controller.
 
@@ -75,6 +78,7 @@ class CEM(SamplingBasedController):
             spline_type=spline_type,
             num_knots=num_knots,
             iterations=iterations,
+            ctrl_callback=ctrl_callback
         )
         self.num_samples = num_samples
         self.sigma_min = sigma_min
