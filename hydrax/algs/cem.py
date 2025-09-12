@@ -100,12 +100,12 @@ class CEM(SamplingBasedController):
         main_shape = (
             self.num_samples - self.num_explore,
             self.num_knots,
-            self.task.mjx_model.nu,
+            self.num_ctrls,
         )
         explore_shape = (
             self.num_explore,
             self.num_knots,
-            self.task.mjx_model.nu,
+            self.num_ctrls,
         )
 
         # Sample main knots with current covariance
