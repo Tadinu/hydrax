@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Sequence, Optional
 
+import numpy as np
 import jax
 import jax.numpy as jnp
 import mujoco as mj
@@ -22,6 +23,8 @@ class Task(ABC):
     def __init__(
             self,
             mj_model: Optional[mj.MjModel] = None,
+            u_min: Optional[np.ndarray] = None,
+            u_max: Optional[np.ndarray] = None,
             trace_sites: Optional[Sequence[str]] = None,
             warp_enabled: Optional[bool] = False,
     ) -> None:
@@ -30,12 +33,17 @@ class Task(ABC):
         Args:
             mj_model: The MuJoCo model to use for simulation.
             trace_sites: A list of site names to visualize with traces.
+            u_min: Minimum control values.
+            u_max: Maximum control values.
 
         Note: many other simulator parameters, e.g., simulator time step,
               Newton iterations, etc., are set in the model itself.
         """
         self.trace_sites = trace_sites
         self.warp_enabled = warp_enabled
+        self.u_min = u_min
+        self.u_max = u_max
+        self.num_ctrls: int = u_min.shape[0] if u_min is not None else 0
         if mj_model is not None:
             assert isinstance(mj_model, mj.MjModel)
             self._mj_model = mj_model
@@ -44,16 +52,19 @@ class Task(ABC):
 
     def _post_init(self, obj_name: Optional[str] = None, keyframe: Optional[str] = None) -> None:
         # Set actuator limits
-        self.u_min = jnp.where(
-            self.mj_model.actuator_ctrllimited,
-            self.mj_model.actuator_ctrlrange[:, 0],
-            -jnp.inf,
-        )
-        self.u_max = jnp.where(
-            self.mj_model.actuator_ctrllimited,
-            self.mj_model.actuator_ctrlrange[:, 1],
-            jnp.inf,
-        )
+        if self.u_min is None:
+            self.u_min = jnp.where(
+                self.mj_model.actuator_ctrllimited,
+                self.mj_model.actuator_ctrlrange[:, 0],
+                -jnp.inf,
+            )
+            self.num_ctrls = self.mj_model.nu
+        if self.u_max is None:
+            self.u_max = jnp.where(
+                self.mj_model.actuator_ctrllimited,
+                self.mj_model.actuator_ctrlrange[:, 1],
+                jnp.inf,
+            )
 
         # Simulation timestep
         if not hasattr(self, "dt"):

@@ -79,6 +79,7 @@ class SamplingBasedController(ABC):
             iterations: The number of optimization iterations to perform.
         """
         self.task = task
+        self.num_ctrls = task.num_ctrls
         self.num_randomizations = max(num_randomizations, 1)
 
         # Risk strategy defaults to average cost
@@ -147,7 +148,7 @@ class SamplingBasedController(ABC):
             knots, params = self.sample_knots(params)
             knots = jnp.clip(
                 knots, self.task.u_min, self.task.u_max
-            )  # (num_rollouts, num_knots, nu)
+            )  # (num_rollouts, num_knots, self.num_ctrls)
 
             # Roll out the control sequences, applying domain randomizations and
             # combining costs using self.risk_strategy.
@@ -204,7 +205,7 @@ class SamplingBasedController(ABC):
 
         # compute the control sequence from the knots
         tq = jnp.linspace(tk[0], tk[-1], self.ctrl_steps)
-        controls = self.interp_func(tq, tk, knots)  # (num_rollouts, H, nu)
+        controls = self.interp_func(tq, tk, knots)  # (num_rollouts, H, self.num_ctrls)
 
         # Apply the control sequences, parallelized over both rollouts and
         # domain randomizations.
@@ -287,9 +288,9 @@ class SamplingBasedController(ABC):
         mean = (
             initial_knots
             if initial_knots is not None
-            else jnp.zeros((self.num_knots, self.task.mjx_model.nu))
+            else jnp.zeros((self.num_knots, self.num_ctrls))
         )
-        assert mean.shape == (self.num_knots, self.task.mjx_model.nu), (
+        assert mean.shape == (self.num_knots, self.num_ctrls), (
             f"Initial knots must have shape (num_knots, nu), got {mean.shape}"
         )
         tk = jnp.linspace(0.0, self.plan_horizon, self.num_knots)
