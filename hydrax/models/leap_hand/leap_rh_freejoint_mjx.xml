@@ -136,7 +136,7 @@
         quat="0.57346234 0 0.81923192 0" type="box"/>
       <geom name="leap_mount_collision_1" size="0.005 0.005 0.005" pos="0.05 0.053 0.002"
         quat="0.4987168 0.64994038 -0.34910175 0.45495826" type="box"/>
-      <site name="grasp_site" pos="0.11 0.0 0.03" group="4"/>
+      <site name="grasp_site" pos="0.11 0.0 0.03"/>
       <body name="palm" pos="0.124 -0.0305 -0.06045" quat="0 1 0 -0.175" gravcomp="1">
         <inertial pos="-0.049542 -0.042914 -0.010227" quat="0.565586 0.427629 -0.574956 0.408254" mass="0.237"
           diaginertia="0.000407345 0.000304759 0.000180736"/>

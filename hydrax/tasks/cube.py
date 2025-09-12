@@ -17,7 +17,7 @@ class CubeRotation(Task):
         mj_model = mj.MjModel.from_xml_path(ROOT + "/models/leap_hand/scene_leap_rh_rotate_cube.xml")
         super().__init__(
             mj_model,
-            trace_sites=["cube_center", "if_tip", "mf_tip", "rf_tip", "th_tip"],
+            trace_sites=["cube", "if_tip", "mf_tip", "rf_tip", "th_tip"],
             impl=impl,
         )
 

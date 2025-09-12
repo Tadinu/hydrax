@@ -18,7 +18,8 @@ if __name__ == "__main__":
     """
 
     # Define the task (cost and dynamics)
-    task = PandaPickEnv()
+    use_ctrl_callback = False
+    task = PandaPickEnv(use_ctrl_callback=use_ctrl_callback)
 
     # Parse command-line arguments
     parser = argparse.ArgumentParser(
@@ -33,7 +34,7 @@ if __name__ == "__main__":
     subparsers.add_parser("cmaes", help="CMA-ES")
     args = parser.parse_args()
 
-    args.algorithm = "cmaes"
+    args.algorithm = "cem"
     # Set the controller based on command-line arguments
     if args.algorithm == "ps" or args.algorithm is None:
         print("Running predictive sampling")
@@ -62,15 +63,16 @@ if __name__ == "__main__":
         print("Running CEM")
         ctrl = CEM(
             task,
-            num_samples=256,
-            num_elites=10,
+            num_samples=128,
+            num_elites=5,
             sigma_start=0.5,
             sigma_min=0.5,
             num_randomizations=8,
-            plan_horizon=2.0,
+            plan_horizon=0.25,
             spline_type="zero",
             num_knots=4,
-            iterations=1
+            # iterations=1,
+            ctrl_callback=task.mjx_convert_free_hand_to_full_arm_hand_ctrl if use_ctrl_callback else None
         )
     elif args.algorithm == "icem":
         print("Running ICEM")
@@ -130,7 +132,7 @@ if __name__ == "__main__":
             mj_data,
             frequency=25,
             fixed_camera_id=None,
-            show_traces=False,
+            show_traces=True,
             max_traces=1,
             trace_color=[1.0, 1.0, 1.0, 1.0],
         )

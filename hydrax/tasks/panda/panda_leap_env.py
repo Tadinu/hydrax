@@ -267,18 +267,18 @@ class PandaLeapEnv(PandaBaseEnv):
             config: config_dict.ConfigDict,
             config_overrides: Optional[Dict[str, Union[str, int, list[Any]]]] = None,
             xml_path: Optional[epath.Path] = None,
+            use_ctrl_callback: bool = False
     ):
         # NOTE: Don't pass [xml_path] to [PandaBaseEnv] here, since the arm+hand model will be programmingly composed
-        super().__init__(config, config_overrides)
+        super().__init__(config, config_overrides, use_ctrl_callback=use_ctrl_callback)
         self.arm_xml: str = xml_path.as_posix() if xml_path \
             else ROOT + "/models/panda/mjx_panda_nohand.xml"
-        self.hand_xml: str = ROOT + "/models/cube/leap_rh.xml"
+        self.hand_xml: str = ROOT + "/models/leap_hand/leap_rh_mjx.xml"
         self.arm_spec: mj.MjSpec = None
         self.hand_spec: mj.MjSpec = None
         self.hand_base_spec: mj.MjsBody = None
 
         # Target obj
-        self.obj_name_: str = "box"
         self.obj_mesh_name_: str = "mj_mug.obj"
         # !NOTE: This is heavy -> unlikely to be runnable by mjx
         self.obj_pointcloud_name_: str = None
@@ -303,12 +303,6 @@ class PandaLeapEnv(PandaBaseEnv):
             self.goal_q_, [0.0, 0.0, 1.0], np.pi * np.random.rand(1) - np.pi / 2
         )
 
-        self.HOME_QPOS = (
-            PandaLeap.HOME_QPOS + self.init_obj_qpos_.tolist()
-            if self.obj_name_
-            else PandaLeap.HOME_QPOS
-        )
-
         # Construct model
         self._mj_model = self._construct_system_model()
         self._mj_model.opt.timestep = self.sim_dt
@@ -319,13 +313,19 @@ class PandaLeapEnv(PandaBaseEnv):
         self.HAND_JOINTS = PandaLeap.HAND_JOINTS
 
         # Trace sites
-        self.trace_sites = ["box"] + [
+        self.trace_sites = [
             PandaLeap.hand_item_full_name(site)
-            for site in ["if_tip", "mf_tip", "rf_tip", "th_tip"]
+            for site in ["if_tip", "mf_tip", "rf_tip", "th_tip", "grasp_site"]
         ]
 
+    @property
+    def home_qpos(self):
+        return (
+            PandaLeap.HOME_QPOS + self.init_obj_qpos_.tolist() if self._obj_name else PandaLeap.HOME_QPOS
+        )
+
     def has_objs(self) -> bool:
-        return self.obj_name_ is not None
+        return self._obj_name is not None
 
     def delete_specs(self) -> None:
         """Delete specs, eg. due to not being `picklable` by multiprocess"""
@@ -337,6 +337,9 @@ class PandaLeapEnv(PandaBaseEnv):
         # https://github.com/google-deepmind/mujoco/blob/main/python/mjspec.ipynb
         # https://mj.readthedocs.io/en/latest/python.html#construction
         self.arm_spec = mj.MjSpec.from_file(self.arm_xml)
+        # For storing next_phase by [SamplingBasedController._scan_fn]
+        self.arm_spec.nuserdata = 1
+        self.arm_spec.option.disableflags |= mj.mjtDisableBit.mjDSBL_CLAMPCTRL
         system_worldbody = self.arm_spec.worldbody
         print("SYSTEM MODEL NAME: ", self.arm_spec.modelname)
         PandaLeap.ARM_BODIES_NAMES = [body.name for body in self.arm_spec.bodies]
@@ -362,8 +365,7 @@ class PandaLeapEnv(PandaBaseEnv):
         # Refetch [self.hand_base_spec], which seems to be just the same after attachment, in [self.arm_spec]
         self.hand_base_spec = self.arm_spec.body(PandaLeap.HAND_BASE_NAME)
 
-        # TODO: Remove prev "home" key from arm_spec once MuJoCo releases [rem_key] API
-        self.arm_spec.add_key(name="home", qpos=self.HOME_QPOS)
+        self.arm_spec.add_key(name="home", qpos=self.home_qpos)
         """
         <keyframe>
             <key name="home"
@@ -380,9 +382,9 @@ class PandaLeapEnv(PandaBaseEnv):
 
         # EE Target mocap body (under [arm_spec]'s worldbody)
         mj_add_mocap_body(
-            self.arm_spec,
-            self.hand_base_spec,
-            PandaLeap.EE_TARGET_MOCAP_NAME,
+            world_spec=self.arm_spec,
+            # target_body_spec=self.hand_base_spec,
+            mocap_name=PandaLeap.EE_TARGET_MOCAP_NAME,
             mocap_geom_type=mj.mjtGeom.mjGEOM_BOX,
             mocap_size=np.array([0.03] * 3),
             rgba=[1, 0, 1, 1]
@@ -390,21 +392,22 @@ class PandaLeapEnv(PandaBaseEnv):
 
         # Enabled [gravcomp]
         for arm_body in self.arm_spec.bodies:
-            arm_body.gravcomp = 1
+            if arm_body.name != self._obj_name:
+                arm_body.gravcomp = 1
 
         # Add finger mocaps
         for fingertip in PandaLeap.FINGER_TIPS:
             mj_add_mocap_body(
-                self.arm_spec,
-                self.hand_base_spec,
-                f"{fingertip}_target",
+                world_spec=self.arm_spec,
+                # target_body_spec=self.hand_base_spec,
+                mocap_name=f"{fingertip}_target",
                 mocap_geom_type=mj.mjtGeom.mjGEOM_SPHERE,
                 mocap_size=np.array([0.02] * 3),
                 rgba=PandaLeap.FINGER_COLORS[fingertip],
             )
 
         # Add contact excludes
-        PandaLeap.disable_arm_hand_collision(self.arm_spec)
+        # PandaLeap.disable_arm_hand_collision(self.arm_spec)
 
         # Compile [arm_spec] -> model
         self._mjx_model = self.arm_spec.compile()

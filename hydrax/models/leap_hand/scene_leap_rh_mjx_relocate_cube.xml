@@ -83,10 +83,10 @@
 
     <!-- hand. -->
     <framepos name="palm_position" objtype="site" objname="grasp_site"/>
-    <framepos name="th_tip_position" objtype="site" objname="th_tip" reftype="body" refname="cube"/>
-    <framepos name="if_tip_position" objtype="site" objname="if_tip" reftype="body" refname="cube"/>
-    <framepos name="mf_tip_position" objtype="site" objname="mf_tip" reftype="body" refname="cube"/>
-    <framepos name="rf_tip_position" objtype="site" objname="rf_tip" reftype="body" refname="cube"/>
+    <framepos name="th_tip_distance_to_cube" objtype="site" objname="th_tip" reftype="body" refname="cube"/>
+    <framepos name="if_tip_distance_to_cube" objtype="site" objname="if_tip" reftype="body" refname="cube"/>
+    <framepos name="mf_tip_distance_to_cube" objtype="site" objname="mf_tip" reftype="body" refname="cube"/>
+    <framepos name="rf_tip_distance_to_cube" objtype="site" objname="rf_tip" reftype="body" refname="cube"/>
 
     <!-- goal. -->
     <framequat name="cube_goal_orientation" objtype="body" objname="target"/>
