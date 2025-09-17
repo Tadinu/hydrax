@@ -1,11 +1,17 @@
 from typing import Any, Dict, Optional, Callable, Union
 from enum import IntEnum
+from etils import epath
 
 import numpy as np
 import jax
 import jax.numpy as jnp
+
+# mujoco
 import mujoco as mj
 from mujoco import mjx
+
+# mujoco playground
+from mujoco_playground._src import mjx_env
 
 from hydrax import ROOT
 from hydrax.task_base import Task
@@ -23,27 +29,42 @@ class RelocatePhase(IntEnum):
 class CubeRelocateEnv(Task):
     """Cube rotation with the LEAP hand."""
 
+    def get_assets(self) -> Dict[str, bytes]:
+        assets = {}
+        models_path = epath.Path(ROOT) / "models"
+        path = models_path / "leap_hand"
+        mjx_env.update_assets(assets, path, "*.xml")
+        mjx_env.update_assets(assets, path / "assets")
+
+        path = models_path / "cube"
+        mjx_env.update_assets(assets, path, "*.xml")
+        mjx_env.update_assets(assets, path / "reorientation_cube_textures")
+        return assets
+
     def __init__(self) -> None:
         """Load the MuJoCo model and set task parameters."""
-        mj_model = mj.MjModel.from_xml_path(ROOT + "/models/leap_hand/scene_leap_rh_mjx_relocate_cube.xml")
-        base_body = mj_model.body("leap_mount")
-        base_body.pos = HAND_BASE_POSE[0]
-        base_body.quat = HAND_BASE_POSE[1]
+
         self.FINGER_TIPS_NAMES = ["if_tip", "mf_tip", "rf_tip", "th_tip"]
         super().__init__(
-            mj_model,
+            xml_path=epath.Path(ROOT) / "models" / "leap_hand" / "scene_leap_rh_mjx_relocate_cube.xml",
             trace_sites=["grasp_site"] + self.FINGER_TIPS_NAMES,
         )
+        self._post_init(obj_name="cube")
+
+        # Move [base_body]
+        base_body = self.mj_model.body("leap_mount")
+        base_body.pos = HAND_BASE_POSE[0]
+        base_body.quat = HAND_BASE_POSE[1]
 
         # Get sensor ids
         self.cube_position_sensor = mj.mj_name2id(
-            mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_position"
+            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_position"
         )
         self.cube_contact_with_palm_sensor = mj.mj_name2id(
-            mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_contact_with_palm"
+            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_contact_with_palm"
         )
         self.cube_distance_to_grasp_sensor = mj.mj_name2id(
-            mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_distance_to_grasp"
+            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_distance_to_grasp"
         )
         self.obj_contact_with_finger_tip_sensors = {finger_tip:
             mj.mj_name2id(
@@ -51,13 +72,14 @@ class CubeRelocateEnv(Task):
             ) for finger_tip in self.FINGER_TIPS_NAMES
         }
         self.cube_distance_to_target_sensor = mj.mj_name2id(
-            mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_distance_to_target"
+            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_distance_to_target"
         )
         self.cube_orientation_from_target_sensor = mj.mj_name2id(
-            mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_orientation_from_target"
+            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_orientation_from_target"
         )
         self.finger_tip_distance_to_cube_sensors = [mj.mj_name2id(
-            mj_model, mj.mjtObj.mjOBJ_SENSOR, f"{finger_tip}_distance_to_cube") for finger_tip in self.FINGER_TIPS_NAMES
+            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, f"{finger_tip}_distance_to_cube") for finger_tip in
+            self.FINGER_TIPS_NAMES
         ]
 
         # Distance (m) beyond which we impose a high cube position cost

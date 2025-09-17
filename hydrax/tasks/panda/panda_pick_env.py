@@ -17,6 +17,8 @@ Adapted from: https://github.com/google-deepmind/mujoco_playground
 """
 
 from typing import Any, Dict, Optional, Union
+
+from art import data
 from etils import epath
 from functools import partial
 
@@ -41,6 +43,7 @@ from hydrax.task_base import Task
 from hydrax import ROOT
 
 # mjmanip
+from mjmanip.robot.arm_hand import ArmHandDiffIK
 from mjmanip.robot.arm_hand_mjx import ArmHandDiffIKMjx
 from mjmanip.robot.panda_leap_mjx import PandaLeapMjx
 
@@ -80,11 +83,12 @@ class PandaPickEnv(PandaLeapEnv, Task):
                  use_ctrl_callback: bool = False):
         if xml_path is None:
             xml_path = epath.Path(ROOT) / "models" / "panda" / "mjx_panda_leap_single_cube.xml"
-        super().__init__(config, config_overrides, xml_path, use_ctrl_callback)
+        super().__init__(config, config_overrides,
+                         xml_path=xml_path,
+                         use_ctrl_callback=use_ctrl_callback)
         self.FINGER_TIPS_NAMES = ["leap_rh/if_tip", "leap_rh/mf_tip", "leap_rh/rf_tip", "leap_rh/th_tip"]
-        self._post_init(obj_name="cube", keyframe="home")
-        self._init_ik()
         self._sample_orientation = sample_orientation
+        self._init_ik()
 
         # Get sensor ids
         self.cube_position_sensor = mj.mj_name2id(
@@ -104,6 +108,9 @@ class PandaPickEnv(PandaLeapEnv, Task):
         self.cube_distance_to_target_sensor = mj.mj_name2id(
             self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_distance_to_target"
         )
+        self.cube_orientation_sensor = mj.mj_name2id(
+            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_orientation"
+        )
         self.cube_orientation_from_target_sensor = mj.mj_name2id(
             self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_orientation_from_target"
         )
@@ -116,22 +123,15 @@ class PandaPickEnv(PandaLeapEnv, Task):
         self.target_distance_threshold = 0.001
 
     def _init_ik(self) -> None:
+        # NOTE: Only [diff-ik-mjx] can be used since [diff-ik] is non-JAX
         PandaLeapMjx.HAND_MODEL_NAME = "leap_rh"
         PandaLeapMjx.NBATCHES = 1
         PandaLeapMjx.init_class_default()
-        self.diff_ik_mjx = ArmHandDiffIKMjx(model=self.mj_model, data=None, world_class=PandaLeapMjx,
+        self.diff_ik_mjx = ArmHandDiffIKMjx(model=self.mj_model, data=self.mj_data,
+                                            world_class=PandaLeapMjx,
                                             q0=jnp.array(self.home_qpos),
-                                            mjx_model=self.mjx_model,
-                                            ee_name=PandaLeapMjx.hand_item_full_name(PandaLeapMjx.GRASP_SITE_NAME))
+                                            mjx_model=self.mjx_model)
         self.diff_ik_mjx.init()
-
-    def _solve_ik(self, data: mjx.Data) -> jax.Array:
-        self.diff_ik_mjx.solve(task_ee_pose=np.asarray(self._get_cube_position(data)))
-
-        # Update [data] from [self.cur_q]
-        arm_q_size = len(self.home_qpos)
-        last_q = self.diff_ik_mjx.last_solved_q
-        return last_q[:arm_q_size]
 
     def reset(self, rng: jax.Array) -> State:
         rng, rng_box, rng_target = jax.random.split(rng, 3)
@@ -197,6 +197,10 @@ class PandaPickEnv(PandaLeapEnv, Task):
         state = State(data, obs, reward, done, metrics, info)
 
         return state
+
+    def step_callback(self, mjx_data: mjx.Data):
+        self.diff_ik_mjx.step_callback(task_ee_pose=np.concatenate([self._get_cube_position(mjx_data),
+                                                                    self._get_cube_orientation(mjx_data)]))
 
     def step(self, state: State, action: jax.Array) -> State:
         delta = action * self._action_scale
@@ -299,6 +303,11 @@ class PandaPickEnv(PandaLeapEnv, Task):
         position_adr = self.mjx_model.sensor_adr[self.cube_distance_to_target_sensor]
         return data.sensordata[position_adr: position_adr + 3]
 
+    def _get_cube_orientation(self, data: mjx.Data) -> jax.Array:
+        """Orientation of the cube in world frame."""
+        orient_adr = self.mjx_model.sensor_adr[self.cube_orientation_sensor]
+        return data.sensordata[orient_adr: orient_adr + 4]
+
     def _get_cube_orientation_distance_to_target(self, data: mjx.Data) -> jax.Array:
         """Orientation of the cube relative to the target grasp orientation."""
         sensor_adr = self.mjx_model.sensor_adr[self.cube_orientation_from_target_sensor]
@@ -328,9 +337,9 @@ class PandaPickEnv(PandaLeapEnv, Task):
 
     def running_cost(self, data: mjx.Data, control: jax.Array) -> jax.Array:
         """The running cost ℓ(xₜ, uₜ)."""
-        arm_ctrl = self._solve_ik(data)
-        qpos_err = jnp.sum(jnp.square(arm_ctrl - control[:, :len(self.home_qpos)]))
-        qpos_cost = 1000 * qpos_err
+        q, solver_data = self.diff_ik_mjx.solve(data.qpos, self.diff_ik_mjx.solver_data)
+        ref_arm_ctrl = q
+        ref_arm_ctrl_cost = 1000 * jnp.sum(jnp.square(ref_arm_ctrl[:control.size] - control))
 
         position_err = self._get_cube_distance_to_grasp(data)
         squared_distance = jnp.sum(jnp.square(position_err[0:2]))  # ignore z
@@ -342,14 +351,15 @@ class PandaPickEnv(PandaLeapEnv, Task):
         orientation_cost = 50 * self._get_cube_orientation_distance_to_target(data)
 
         grasp_cost = 0.001 * jnp.sum(jnp.square(control)) + self._get_fingertips_cost(data)
-        return qpos_cost + position_cost + orientation_cost + grasp_cost
+        return ref_arm_ctrl_cost + position_cost + orientation_cost + grasp_cost
 
     def terminal_cost(self, data: mjx.Data) -> jax.Array:
         """The terminal cost ϕ(x_T)."""
-        arm_ctrl = self._solve_ik(data)
-        qpos_cost = jnp.sum(jnp.square(arm_ctrl - data.ctrl[:, :len(self.home_qpos)]))
+        q, solver_data = self.diff_ik_mjx.solve(data.qpos, self.diff_ik_mjx.solver_data)
+        ref_arm_ctrl = q
+        ref_arm_ctrl_cost = jnp.sum(jnp.square(ref_arm_ctrl[:data.ctrl.size] - data.ctrl))
         position_err = self._get_cube_distance_to_grasp(data)
-        return 1000 * qpos_cost + 100 * jnp.sum(jnp.square(position_err)) + self._get_fingertips_cost(data)
+        return 1000 * ref_arm_ctrl_cost + 100 * jnp.sum(jnp.square(position_err)) + self._get_fingertips_cost(data)
 
     def _get_obs(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
         grasp_pos = data.site_xpos[self._grasp_site]
@@ -361,7 +371,7 @@ class PandaPickEnv(PandaLeapEnv, Task):
             grasp_pos,
             grasp_mat[3:],
             data.xmat[self._obj_body].ravel()[3:],
-            data.xpos[self._obj_body] - data.site_xpos[self._grasp_site],
+            data.xpos[self._obj_body] - grasp_pos,
             info["target_pos"] - data.xpos[self._obj_body],
             target_mat.ravel()[:6] - data.xmat[self._obj_body].ravel()[:6],
             data.ctrl - data.qpos[self._robot_qposadr[:-1]],

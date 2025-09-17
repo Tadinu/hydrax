@@ -70,10 +70,10 @@ class PandaOpenCabinetEnv(PandaBaseEnv, Task):
 
         # Enable hand base collision to shape learning
         self.mj_model.geom("hand_capsule").conaffinity = 3
-        self._mjx_model = mjx.put_model(self.mj_model)
-
-        self._post_init(obj_name="handle", keyframe="upright")
         self._barrier_geom = self._mj_model.geom("barrier").id
+
+        # Create [mj-data, mjx-model], configuring specifics
+        self._post_init(obj_name="handle", keyframe="upright")
 
     def reset(self, rng: jax.Array) -> State:
         """Resets the environment to an initial state."""
