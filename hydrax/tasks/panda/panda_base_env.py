@@ -17,8 +17,8 @@
 """
 
 from typing import Any, Dict, Optional, Union, Sequence
-
 from etils import epath
+
 import jax.numpy as jp
 from ml_collections import config_dict
 import mujoco as mj
@@ -46,8 +46,7 @@ class PandaBaseEnv(mjx_env.MjxEnv, Task):
             action_scale=0.04,
         )
 
-    @staticmethod
-    def get_assets() -> Dict[str, bytes]:
+    def get_assets(self) -> Dict[str, bytes]:
         assets = {}
         path = epath.Path(ROOT) / "models" / "panda"
         mjx_env.update_assets(assets, path, "*.xml")
@@ -63,18 +62,7 @@ class PandaBaseEnv(mjx_env.MjxEnv, Task):
             trace_sites: Optional[Sequence[str]] = None
     ):
         super().__init__(config, config_overrides)
-        Task.__init__(self, trace_sites=trace_sites)
-
-        self._mj_model: mj.MjModel = None
-        self._mjx_model: mjx.Model = None
-        self._xml_path: str = ""
-        self._model_assets = self.get_assets()
-        if xml_path is not None:
-            self._xml_path = xml_path.as_posix()
-            xml = xml_path.read_text()
-            self._mj_model = mj.MjModel.from_xml_string(xml, assets=self._model_assets)
-            self._mj_model.opt.timestep = self.sim_dt
-            self._mjx_model = mjx.put_model(self._mj_model)
+        Task.__init__(self, xml_path=xml_path, sim_dt=config.sim_dt, trace_sites=trace_sites)
         self._action_scale = config.action_scale
         self.use_ctrl_callback = use_ctrl_callback
 
@@ -93,7 +81,7 @@ class PandaBaseEnv(mjx_env.MjxEnv, Task):
         self._obj_name: str = "cube"
 
     def _post_init(self, obj_name: Optional[str] = None, keyframe: Optional[str] = None):
-        # Init u_min, u_max
+        # 1- Init [u_min, u_max]
         if self.use_ctrl_callback:
             self.u_min = np.concatenate([np.array([-1] * 3 + [-1.57] * 3),
                                          self.mj_model.actuator_ctrlrange[7:, 0]])
@@ -101,9 +89,9 @@ class PandaBaseEnv(mjx_env.MjxEnv, Task):
                                          self.mj_model.actuator_ctrlrange[7:, 1]])
             self.num_ctrls = self.u_min.size
 
-        self.trace_sites += [obj_name]
-        Task._post_init(self, obj_name, keyframe)  # Init [u_min, u_max] here if not yet, so run later
-        self._obj_name = obj_name
+        # 2- Task's [_pos_init]
+        # Init [u_min, u_max] here if not create above, so run later
+        Task._post_init(self, obj_name, keyframe)
 
         # Robot-specifics
         all_joints = self.ARM_JOINTS + self.HAND_JOINTS
@@ -146,19 +134,23 @@ class PandaBaseEnv(mjx_env.MjxEnv, Task):
         self._hand_geom = self._mj_model.geom("hand_capsule").id
         self._hand_full_geoms = [self._left_finger_geom, self._right_finger_geom, self._hand_geom]
 
-    @property
+    @property  # Impl of parent abstract
     def xml_path(self) -> str:
         return self._xml_path
 
-    @property
+    @property  # Impl of parent abstract
     def mj_model(self) -> mj.MjModel:
         return self._mj_model
 
-    @property
+    @property  # Impl of parent abstract
+    def mj_data(self) -> mj.MjData:
+        return self._mj_data
+
+    @property  # Impl of parent abstract
     def mjx_model(self) -> mjx.Model:
         return self._mjx_model
 
-    @property
+    @property  # Impl of parent abstract
     def action_size(self) -> int:
         return self.mjx_model.nu
 

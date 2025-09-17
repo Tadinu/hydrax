@@ -101,26 +101,19 @@ class PandaPickCubeCartesian(PandaPickEnv):
             config_overrides: Optional[Dict[str, Union[str, int, list[Any]]]] = None,
             xml_path: Optional[epath.Path] = None
     ):
+        if xml_path is None:
+            xml_path = epath.Path(ROOT) / "models" / "panda" / "mjx_single_cube_camera.xml"
         super().__init__(config, config_overrides, xml_path)
-        self._vision = config.vision
 
-        xml_path = epath.Path(ROOT) / "models" / "panda" / "mjx_single_cube_camera.xml"
-        self._xml_path = xml_path.as_posix()
-
-        mj_model = self.modify_model(
-            mj.MjModel.from_xml_string(
-                xml_path.read_text(), assets=PandaBaseEnv.get_assets()
-            )
-        )
-        mj_model.opt.timestep = config.sim_dt
-
-        self._mj_model = mj_model
-        self._mjx_model = mjx.put_model(mj_model)
+        # Modify [mj_model]
+        self.modify_model()
 
         # Set gripper in sight of camera
         self._post_init(obj_name='box', keyframe='low_home')
         self._box_geom = self._mj_model.geom('box').id
 
+        # Renderer
+        self._vision = config.vision
         if self._vision:
             try:
                 # pylint: disable=import-outside-toplevel
@@ -156,7 +149,8 @@ class PandaPickCubeCartesian(PandaPickEnv):
         )
         self._sample_orientation = False
 
-    def modify_model(self, mj_model: mj.MjModel):
+    def modify_model(self):
+        mj_model = self.mj_model
         # Expand floor size to non-zero so Madrona can render it
         mj_model.geom_size[mj_model.geom('floor').id, :2] = [5.0, 5.0]
 
@@ -168,7 +162,6 @@ class PandaPickCubeCartesian(PandaPickEnv):
             if data_id == mesh_id
         ]
         mj_model.geom_matid[geoms] = mj_model.mat('off_white').id
-        return mj_model
 
     def reset(self, rng: jax.Array) -> mjx_env.State:
         """Resets the environment to an initial state."""

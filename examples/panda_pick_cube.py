@@ -121,10 +121,10 @@ if __name__ == "__main__":
 
     # Define the model used for simulation (with more realistic parameters)
     mj_model = task.mj_model
-    mj_data = mj.MjData(mj_model)
+    mj_data = task.mj_data
 
     # Run the interactive simulation
-    synchronous = False
+    synchronous = True
     if synchronous:
         sync_run_interactive(
             ctrl,

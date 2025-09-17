@@ -250,8 +250,7 @@ _GRIPPER_DIR = "leap_hand"
 class PandaLeapEnv(PandaBaseEnv):
     """Base environment for Franka Emika Panda and Leap hand."""
 
-    @staticmethod
-    def get_assets() -> Dict[str, bytes]:
+    def get_assets(self) -> Dict[str, bytes]:
         assets = {}
         models_path = epath.Path(ROOT) / "models"
         path = models_path / _ARM_DIR
@@ -278,50 +277,57 @@ class PandaLeapEnv(PandaBaseEnv):
         self.hand_spec: mj.MjSpec = None
         self.hand_base_spec: mj.MjsBody = None
 
-        # Target obj
-        self.obj_mesh_name_: str = "mj_mug.obj"
+        # 0- Init objects (required for model creating spec)
+        self._init_objects()
+
+        # 1- Construct model
+        # -> Init [PandaLeap] specifics
+        self._mj_model = self._construct_system_model()
+
+        # 1.1- Joint names
+        self.ARM_JOINTS = PandaLeap.ARM_JOINTS
+        self.HAND_JOINTS = PandaLeap.HAND_JOINTS
+
+        # 2- Trace sites
+        self.trace_sites += [
+            PandaLeap.hand_item_full_name(site)
+            for site in ["if_tip", "mf_tip", "rf_tip", "th_tip", "grasp_site"]
+        ]
+
+        # 3- Create [mj-data, mjx-model], configuring specifics
+        self._post_init(obj_name="cube", keyframe="home")
+
+    @property
+    def home_qpos(self):
+        return (
+            PandaLeap.HOME_QPOS + self._init_obj_qpos.tolist() if self._obj_name else PandaLeap.HOME_QPOS
+        )
+
+    def _init_objects(self):
+        self._obj_mesh_name: str = "mj_mug.obj"
         # !NOTE: This is heavy -> unlikely to be runnable by mjx
-        self.obj_pointcloud_name_: str = None
+        self._obj_pointcloud_name: str = None
+
+        # Obj init pose
         rand_seed = 1
         np.random.seed(100 + rand_seed)
         init_obj_quat = np.zeros(4)
         init_obj_yaw = np.pi * np.random.rand(1) - np.pi / 2
         mj.mju_axisAngle2Quat(init_obj_quat, [0.0, 0.0, 1.0], init_obj_yaw)
-        self.init_obj_pose_ = np.hstack((np.array([0.5, 0.5, 0.05]), init_obj_quat))
+        self._init_obj_pose = np.hstack((np.array([0.5, 0.5, 0.05]), init_obj_quat))
         init_obj_xy = np.array(
-            [self.init_obj_pose_[0], self.init_obj_pose_[1]]
+            [self._init_obj_pose[0], self._init_obj_pose[1]]
         ) + 0.005 * np.random.randn(2)
-        init_obj_pos = np.hstack([init_obj_xy, self.init_obj_pose_[2]])
-        self.init_obj_qpos_ = np.hstack((init_obj_pos, self.init_obj_pose_[3:]))
+        init_obj_pos = np.hstack([init_obj_xy, self._init_obj_pose[2]])
+        self._init_obj_qpos = np.hstack((init_obj_pos, self._init_obj_pose[3:]))
 
         # Goal
-        self.goal_p_ = np.array(
-            [init_obj_xy[0] + 0.01, init_obj_xy[1] - 0.01, self.init_obj_pose_[2]]
+        self._goal_p = np.array(
+            [init_obj_xy[0] + 0.01, init_obj_xy[1] - 0.01, self._init_obj_pose[2]]
         )
-        self.goal_q_ = np.zeros(4)
+        self._goal_q = np.zeros(4)
         mj.mju_axisAngle2Quat(
-            self.goal_q_, [0.0, 0.0, 1.0], np.pi * np.random.rand(1) - np.pi / 2
-        )
-
-        # Construct model
-        self._mj_model = self._construct_system_model()
-        self._mj_model.opt.timestep = self.sim_dt
-        self._mjx_model = mjx.put_model(self._mj_model)
-
-        # Joint names
-        self.ARM_JOINTS = PandaLeap.ARM_JOINTS
-        self.HAND_JOINTS = PandaLeap.HAND_JOINTS
-
-        # Trace sites
-        self.trace_sites = [
-            PandaLeap.hand_item_full_name(site)
-            for site in ["if_tip", "mf_tip", "rf_tip", "th_tip", "grasp_site"]
-        ]
-
-    @property
-    def home_qpos(self):
-        return (
-            PandaLeap.HOME_QPOS + self.init_obj_qpos_.tolist() if self._obj_name else PandaLeap.HOME_QPOS
+            self._goal_q, [0.0, 0.0, 1.0], np.pi * np.random.rand(1) - np.pi / 2
         )
 
     def has_objs(self) -> bool:
@@ -340,7 +346,7 @@ class PandaLeapEnv(PandaBaseEnv):
         # For storing next_phase by [SamplingBasedController._scan_fn]
         self.arm_spec.nuserdata = 1
         self.arm_spec.option.disableflags |= mj.mjtDisableBit.mjDSBL_CLAMPCTRL
-        system_worldbody = self.arm_spec.worldbody
+        # system_worldbody = self.arm_spec.worldbody
         print("SYSTEM MODEL NAME: ", self.arm_spec.modelname)
         PandaLeap.ARM_BODIES_NAMES = [body.name for body in self.arm_spec.bodies]
         # Disable arm's bodies collision
@@ -410,8 +416,8 @@ class PandaLeapEnv(PandaBaseEnv):
         # PandaLeap.disable_arm_hand_collision(self.arm_spec)
 
         # Compile [arm_spec] -> model
-        self._mjx_model = self.arm_spec.compile()
-        return self._mjx_model
+        self._mj_model = self.arm_spec.compile()
+        return self._mj_model
 
     def _post_init(self, obj_name: Optional[str] = None, keyframe: Optional[str] = None):
         super()._post_init(obj_name, keyframe)
@@ -431,9 +437,7 @@ class PandaLeapEnv(PandaBaseEnv):
         self._max_torque = 8.0
 
     def _init_hand(self):
-        self._grasp_site = self.mj_model.site(
-            PandaLeap.hand_item_full_name("grasp_site")
-        ).id
+        self._grasp_site = self.mj_model.site(PandaLeap.hand_item_full_name("grasp_site")).id
         self._hand_geoms = [self.mj_model.geom(n).id for n in PandaLeap.HAND_GEOMS]
         self._finger_geoms = [self.mj_model.geom(n).id for n in PandaLeap.FINGER_GEOMS]
         self._hand_full_geoms = self._hand_geoms + self._finger_geoms

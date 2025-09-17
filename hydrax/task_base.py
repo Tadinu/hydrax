@@ -1,11 +1,17 @@
+import os
+
 from abc import ABC, abstractmethod
 from typing import Dict, Sequence, Optional
+from etils import epath
 
 import numpy as np
 import jax
 import jax.numpy as jnp
+
 import mujoco as mj
 from mujoco import mjx
+
+jax.config.update("jax_check_tracer_leaks", True)
 
 
 class Task(ABC):
@@ -20,11 +26,17 @@ class Task(ABC):
     ℓ(xₜ, uₜ) and ϕ(x_{T+1}) are defined by the task instance itself.
     """
 
+    def get_assets(self) -> Dict[str, bytes]:
+        return {}
+
     def __init__(
             self,
             mj_model: Optional[mj.MjModel] = None,
+            xml_path: Optional[epath.Path] = None,
             u_min: Optional[np.ndarray] = None,
             u_max: Optional[np.ndarray] = None,
+            sim_dt: Optional[float] = 0.01,
+            ctrl_dt: Optional[float] = 0.01,
             trace_sites: Optional[Sequence[str]] = None,
         impl: str = "warp",
     ) -> None:
@@ -41,18 +53,46 @@ class Task(ABC):
         Note: many other simulator parameters, e.g., simulator time step,
               Newton iterations, etc., are set in the model itself.
         """
-        self.trace_sites = trace_sites
+        self._mj_model: mj.MjModel = None
+        self._mj_data: mj.MjData = None
         self.warp_enabled = (impl == 'warp')
+        self._mjx_model: mjx.Model = None
+        self._xml_path: str = ""
+        if not hasattr(self, "sim_dt"):
+            self.sim_dt = sim_dt
+        if not hasattr(self, "ctrl_dt"):
+            self.ctrl_dt = ctrl_dt
+        self.trace_sites = trace_sites if trace_sites else []
         self.u_min = u_min
         self.u_max = u_max
         self.num_ctrls: int = u_min.shape[0] if u_min is not None else 0
+
+        # MJ-Model
         if mj_model is not None:
             assert isinstance(mj_model, mj.MjModel)
             self._mj_model = mj_model
-            self._mjx_model = mjx.put_model(mj_model, impl=impl)
-            self._post_init()
+        elif xml_path is not None:
+            self._xml_path = xml_path.as_posix()
+            xml = xml_path.read_text()
+            self._mj_model = mj.MjModel.from_xml_string(xml, assets=self.get_assets())
+        else:
+            print("Mj/Mjx-Models will be created from spec later!")
+
+        # NOTE: [_pos_init] is expected to be called independently up to specific child class
 
     def _post_init(self, obj_name: Optional[str] = None, keyframe: Optional[str] = None) -> None:
+        self._obj_name = obj_name
+
+        assert self._mj_model is not None
+        self._mj_model.opt.timestep = self.sim_dt
+
+        # MJ-Data
+        self._mj_data = mj.MjData(self._mj_model)
+
+        # MJX-Model
+        # NOTE: Only create [mjx-model] here, [mjx-data] is dynamically made/updated at each rollout
+        self._mjx_model = mjx.put_model(self._mj_model, impl=impl)
+
         # Set actuator limits
         if self.u_min is None:
             self.u_min = jnp.where(
@@ -68,25 +108,33 @@ class Task(ABC):
                 jnp.inf,
             )
 
-        # Simulation timestep
-        if not hasattr(self, "dt"):
-            self.dt = self.mj_model.opt.timestep
-
         # Get site IDs for points we want to trace
+        self.trace_sites += [obj_name]
         self.trace_site_ids = jnp.array(
             [self.mj_model.site(name).id for name in self.trace_sites]
         )
 
-    @property
+    @property  # -> Consistent with co-parent [mjx_env.MjxEnv]
+    def dt(self):
+        return self.ctrl_dt
+
+    @property  # -> Consistent with co-parent [mjx_env.MjxEnv]
     def mj_model(self) -> mj.MjModel:
         return self._mj_model
 
-    @property
+    @property  # -> Consistent with co-parent [mjx_env.MjxEnv]
     def mjx_model(self) -> mjx.Model:
         return self._mjx_model
 
+    @property  # -> Consistent with co-parent [mjx_env.MjxEnv]
+    def xml_path(self) -> str:
+        return self._xml_path
+
     def next_phase(self, state: mjx.Data) -> jnp.int32:
         return 0
+
+    def step_callback(self, state: mjx.Data):
+        pass
 
     @abstractmethod
     def running_cost(self, state: mjx.Data, control: jax.Array) -> jax.Array:

@@ -111,12 +111,16 @@ class PandaRobotiqPushCubeEnv(PandaRobotiqBaseEnv):
             self,
             config: config_dict.ConfigDict = default_config(),
             config_overrides: Optional[Dict[str, Union[str, int, list[Any]]]] = None,
+            xml_path: Optional[epath.Path] = None,
             sample_orientation: bool = False,  # pylint: disable=unused-argument
     ):
+        if xml_path is None:
+            xml_path = epath.Path(ROOT) / "models" / "panda" / "scene_panda_robotiq_cube.xml"
         super().__init__(
             config,
-            epath.Path(ROOT) / "models" / "panda" / "scene_panda_robotiq_cube.xml",
             config_overrides,
+            xml_path=xml_path,
+            sample_orientation=sample_orientation
         )
         self._post_init(obj_name="box", keyframe="home")
 
@@ -526,14 +530,14 @@ class PandaRobotiqPushCubeEnv(PandaRobotiqBaseEnv):
         # Add noise to robot proprio observation.
         info["rng"], key1, key2, key3, key4 = jax.random.split(info["rng"], 5)
         robot_qpos = data.qpos[
-                     self._q_low_joint_pos_index: self._q_upper_joint_pos_index
-                     ]
+            self._q_low_joint_pos_index: self._q_upper_joint_pos_index
+        ]
         robot_qpos_w_noise = robot_qpos + jax.random.uniform(
             key1, minval=0, maxval=self._config.noise_config.noise_scales.robot_qpos
         )
         robot_qvel = data.qvel[
-                     self._qd_low_joint_pos_index: self._qd_upper_joint_pos_index
-                     ]
+            self._qd_low_joint_pos_index: self._qd_upper_joint_pos_index
+        ]
         robot_qvel_w_noise = robot_qvel + jax.random.uniform(
             key2, minval=0, maxval=self._config.noise_config.noise_scales.robot_qvel
         )
