@@ -47,8 +47,7 @@ _GRIPPER_DIR = "robotiq_2f85_v4"
 class PandaRobotiqBaseEnv(PandaBaseEnv):
     """Base environment for Franka Emika Panda and Robotiq gripper."""
 
-    @staticmethod
-    def get_assets() -> Dict[str, bytes]:
+    def get_assets(self) -> Dict[str, bytes]:
         assets = {}
         models_path = epath.Path(ROOT) / "models"
         path = models_path / _ARM_DIR
@@ -62,8 +61,8 @@ class PandaRobotiqBaseEnv(PandaBaseEnv):
     def __init__(
             self,
             config: config_dict.ConfigDict,
-            xml_path: epath.Path,
             config_overrides: Optional[Dict[str, Union[str, int, list[Any]]]] = None,
+            xml_path: Optional[epath.Path] = None
     ):
         super().__init__(config, config_overrides, xml_path)
         self.ARM_JOINTS = [

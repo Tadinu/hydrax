@@ -74,6 +74,7 @@
     <contact name="cube_contact_with_rf_tip" geom1="cube" geom2="rf_tip" data="found force"/>
     <framepos name="cube_distance_to_grasp" objtype="body" objname="cube" reftype="site" refname="grasp_site" />
     <framepos name="cube_distance_from_target" objtype="body" objname="cube" reftype="body" refname="target"/>
+    <framequat name="cube_orientation" objtype="body" objname="cube"/>
     <framequat name="cube_orientation_from_target" objtype="body" objname="cube" reftype="body" refname="target"/>
     <framepos name="grasp_distance_from_target" objtype="site" objname="grasp_site" reftype="body" refname="target"/>
     <framelinvel name="cube_linvel" objtype="body" objname="cube"/>

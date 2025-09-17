@@ -212,8 +212,7 @@ class AdroitHandRelocateEnv(mjx_env.MjxEnv, Task):
         )
         return config
 
-    @staticmethod
-    def get_assets() -> Dict[str, bytes]:
+    def get_assets(self) -> Dict[str, bytes]:
         assets = {}
         path = epath.Path(ROOT) / "models" / "adroit_hand"
         mjx_env.update_assets(assets, path, "*.xml")
@@ -221,23 +220,14 @@ class AdroitHandRelocateEnv(mjx_env.MjxEnv, Task):
         mjx_env.update_assets(assets, path / "resources" / "textures")
         return assets
 
-    def __init__(
-            self,
-            config: config_dict.ConfigDict = default_config(),
-            config_overrides: Optional[Dict[str, Union[str, int, list[Any]]]] = None,
-    ):
+    def __init__(self,
+                 config: config_dict.ConfigDict = default_config(),
+                 config_overrides: Optional[Dict[str, Union[str, int, list[Any]]]] = None):
         super().__init__(config, config_overrides)
-        Task.__init__(self, trace_sites=["S_fftip", "S_mftip", "S_rftip", "S_lftip", "S_thtip"])
+        Task.__init__(self, xml_path=epath.Path(ROOT) / "models" / "adroit_hand" / "adroit_relocate.xml",
+                      sim_dt=config.sim_dt,
+                      trace_sites=["S_fftip", "S_mftip", "S_rftip", "S_lftip", "S_thtip"])
 
-        self._mj_model: mj.MjModel = None
-        self._mjx_model: mjx.Model = None
-        self._model_assets = self.get_assets()
-
-        self._xml_path = epath.Path(ROOT) / "models" / "adroit_hand" / "adroit_relocate.xml"
-        xml = self._xml_path.read_text()
-        self._mj_model = mj.MjModel.from_xml_string(xml, assets=self._model_assets)
-        self._mj_model.opt.timestep = self.sim_dt
-        self._mjx_model = mjx.put_model(self._mj_model)
         self._action_scale = config.action_scale
 
         self.ARM_JOINTS = [
@@ -267,9 +257,6 @@ class AdroitHandRelocateEnv(mjx_env.MjxEnv, Task):
 
         # Distance (m) beyond which we impose a high obj position cost
         self.delta = 0.015
-
-        # Post-init
-        self._post_init(obj_name="object")
 
     def _post_init(self, obj_name: Optional[str] = None, keyframe: Optional[str] = None):
         Task._post_init(self, obj_name, keyframe)

@@ -129,6 +129,9 @@ class SamplingBasedController(ABC):
                 {key: 0 for key in randomizations.keys()}
             )
 
+    def step_callback(self, state: mjx.Data):
+        self.task.step_callback(state)
+
     def optimize(self, state: mjx.Data, params: Any) -> Tuple[Any, Trajectory]:
         """Perform an optimization step to update the policy parameters.
 
@@ -255,11 +258,21 @@ class SamplingBasedController(ABC):
             A Trajectory object containing the control, costs, and trace sites.
         """
 
-        def _scan_fn(
-                x: mjx.Data, u: jax.Array,
-        ) -> Tuple[mjx.Data, Tuple[mjx.Data, jax.Array, jax.Array]]:
+        def _scan_fn(x: mjx.Data, u: jax.Array) -> Tuple[mjx.Data, Tuple[mjx.Data, jax.Array, jax.Array]]:
             """Compute the cost and observation, then advance the state."""
-            ctrl = self.ctrl_callback(x, u) if self.ctrl_callback else u
+
+            def valid_cb(args):
+                x, u, cb = args
+                return cb(x, u) if cb else u
+
+            def void_cb(args):
+                x, u, cb = args
+                return u
+
+            ctrl = jax.lax.cond(self.ctrl_callback is not None,
+                                valid_cb,
+                                void_cb,
+                                (x, u, self.ctrl_callback))
             x = x.replace(ctrl=ctrl)
             x = mjx.step(model, x)  # step model + compute site positions
             cost = self.dt * self.task.running_cost(x, ctrl)
