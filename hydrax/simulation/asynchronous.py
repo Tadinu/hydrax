@@ -82,8 +82,17 @@ class SharedMemoryMujocoData:
         self.qpos = SharedMemoryNumpyArray(
             np.array(mj_data.qpos, dtype=np.float32), ctx
         )
+        self.ref_arm_qpos = SharedMemoryNumpyArray(
+            np.array(mj_data.qpos, dtype=np.float32), ctx
+        )
         self.qvel = SharedMemoryNumpyArray(
             np.array(mj_data.qvel, dtype=np.float32), ctx
+        )
+        self.xpos = SharedMemoryNumpyArray(
+            np.array(mj_data.xpos, dtype=np.float32), ctx
+        )
+        self.xquat = SharedMemoryNumpyArray(
+            np.array(mj_data.xquat, dtype=np.float32), ctx
         )
         self.ctrl = SharedMemoryNumpyArray(
             np.zeros(mj_data.ctrl.shape, dtype=np.float32), ctx
@@ -162,6 +171,7 @@ def run_controller(
             )
 
         # Do a planning step
+        ctrl.task.ref_qpos[:7] = shm_data.ref_arm_qpos[:7]
         policy_params = jit_optimize(mjx_data, policy_params)
 
         # Send the action to the simulator.
@@ -182,6 +192,7 @@ def run_controller(
 
 
 def run_simulator(
+        ctrl: SamplingBasedController,
         mj_model: mj.MjModel,
         mj_data: mj.MjData,
         shm_data: SharedMemoryMujocoData,
@@ -200,6 +211,10 @@ def run_simulator(
     # Wait for the controller to be ready
     ready.wait()
 
+    obj_id = ctrl.task.mj_model.body("cube").id
+    mocap_obj_id = ctrl.task.mj_model.body("target").id
+    mocap_id = ctrl.task.mj_model.body_mocapid[obj_id]
+    IDENTITY_WXYZ = np.array([1., 0., 0., 0.])
     with mujoco.viewer.launch_passive(mj_model, mj_data) as viewer:
         while viewer.is_running():
             start_time = time.time()
@@ -207,19 +222,24 @@ def run_simulator(
             # Write the latest state to shared memory for the controller to read
             shm_data.qpos[:] = mj_data.qpos
             shm_data.qvel[:] = mj_data.qvel
+            shm_data.xpos[:] = mj_data.xpos
+            shm_data.xquat[:] = mj_data.xquat
 
             if len(mj_data.mocap_pos) > 0:
                 shm_data.mocap_pos[:] = mj_data.mocap_pos
                 shm_data.mocap_quat[:] = mj_data.mocap_quat
 
+            ctrl.task.update_ref_qpos(np.concat([mj_data.xpos[obj_id], IDENTITY_WXYZ]))
+            shm_data.ref_arm_qpos[:] = np.asarray(ctrl.task.ref_qpos)
+
             # Read the lastest control values from shared memory
             # TODO: actually query the spline rather than assuming zero-order
             # hold and a sufficiently high control rate
-            if shm_data.ctrl[:].any():
-                mj_data.ctrl[:] = shm_data.ctrl[:]
-            else:
+            mj_data.ctrl[:] = shm_data.ctrl[:]
+            if False:
                 mj_data.ctrl[7:] = shm_data.hand_ctrl[:]
-                mj_data.ctrl[:7] = convert_wrist_to_arm_ctrl(mj_model, mj_data, shm_data.wrist_ctrl[:])
+                mj_data.ctrl[:7] = convert_wrist_to_arm_ctrl(mj_model, mj_data, shm_data.wrist_ctrl[:],
+                                                             grasp_site="leap_rh/grasp_site")
 
                 qpos = mj_data.qpos.copy()
                 qvel = np.zeros_like(mj_data.qvel)
@@ -227,7 +247,7 @@ def run_simulator(
                 mj.mj_integratePos(mj_model, qpos, qvel, mj_model.opt.timestep)
                 mj_data.ctrl[:7] = qpos[:7]
 
-                # Step the simulation
+            # Step the simulation
             mj.mj_step(mj_model, mj_data)
             viewer.sync()
 
@@ -268,7 +288,7 @@ def run_interactive(
     # Set up the simulator and controller processes
     sim = ctx.Process(
         target=run_simulator,
-        args=(mj_model, mj_data, shm_data, ready, finished),
+        args=(controller, mj_model, mj_data, shm_data, ready, finished),
     )
     control = ctx.Process(
         target=run_controller,
