@@ -127,15 +127,30 @@ class PandaPickEnv(PandaLeapEnv, Task):
         self.target_distance_threshold = 0.001
 
     def _init_ik(self) -> None:
-        # NOTE: Only [diff-ik-mjx] can be used since [diff-ik] is non-JAX
         PandaLeapMjx.HAND_MODEL_NAME = "leap_rh"
         PandaLeapMjx.NBATCHES = 1
         PandaLeapMjx.init_class_default()
-        self.diff_ik_mjx = ArmHandDiffIKMjx(model=self.mj_model, data=self.mj_data,
-                                            world_class=PandaLeapMjx,
-                                            q0=jnp.array(self.home_qpos),
-                                            mjx_model=self.mjx_model)
-        self.diff_ik_mjx.init()
+        use_diff_ik_mjx = False
+        self.diff_ik_mjx = None
+        self.diff_ik = None
+        if use_diff_ik_mjx:
+            self.diff_ik_mjx = ArmHandDiffIKMjx(model=self.mj_model, data=self.mj_data,
+                                                world_class=PandaLeapMjx,
+                                                q0=jnp.array(self.home_qpos),
+                                                mjx_model=self.mjx_model)
+            self.diff_ik_mjx.init()
+        else:
+            self.diff_ik = ArmHandDiffIK(model=self.mj_model, data=self.mj_data,
+                                         world_class=PandaLeapMjx,
+                                         q0=PandaLeap.HOME_QPOS)
+            self.diff_ik.init()
+
+    def update_ref_qpos(self, ee_pose: Optional[Union[np.ndarray, jnp.ndarray]] = None):
+        if ee_pose is None:
+            obj = self.mj_data.body(self._obj_name)
+            IDENTITY_WXYZ = np.array([1., 0., 0., 0.])
+            ee_pose = np.concatenate([obj.xpos, IDENTITY_WXYZ])
+        self.ref_qpos = self.diff_ik.plan(task_ee_pose=np.asarray(ee_pose))
 
     def reset(self, rng: jax.Array) -> State:
         rng, rng_box, rng_target = jax.random.split(rng, 3)
@@ -203,8 +218,9 @@ class PandaPickEnv(PandaLeapEnv, Task):
         return state
 
     def step_callback(self, mjx_data: mjx.Data):
-        self.diff_ik_mjx.step_callback(task_ee_pose=np.concatenate([self._get_cube_position(mjx_data),
-                                                                    self._get_cube_orientation(mjx_data)]))
+        if self.diff_ik_mjx:
+            self.diff_ik_mjx.step_callback(task_ee_pose=np.concatenate([self._get_cube_position(mjx_data),
+                                                                        self._get_cube_orientation(mjx_data)]))
 
     def step(self, state: State, action: jax.Array) -> State:
         delta = action * self._action_scale
@@ -341,9 +357,9 @@ class PandaPickEnv(PandaLeapEnv, Task):
 
     def running_cost(self, data: mjx.Data, control: jax.Array) -> jax.Array:
         """The running cost ℓ(xₜ, uₜ)."""
-        q = self.diff_ik_mjx.solve(data.qpos)
-        ref_arm_ctrl = q
-        ref_arm_ctrl_cost = 1000 * jnp.sum(jnp.square(ref_arm_ctrl[:control.size] - control))
+        ref_qpos = jnp.array(self.ref_qpos)
+        square_ref_arm_pos_distance = jnp.sum(jnp.square(ref_qpos - data.qpos[:ref_qpos.size]))
+        ref_qpos_cost = 200 * square_ref_arm_pos_distance
 
         position_err = self._get_cube_distance_to_grasp(data)
         squared_distance = jnp.sum(jnp.square(position_err[0:2]))  # ignore z
@@ -355,15 +371,14 @@ class PandaPickEnv(PandaLeapEnv, Task):
         orientation_cost = 50 * self._get_cube_orientation_distance_to_target(data)
 
         grasp_cost = 0.001 * jnp.sum(jnp.square(control)) + self._get_fingertips_cost(data)
-        return ref_arm_ctrl_cost + position_cost + orientation_cost + grasp_cost
+        return ref_qpos_cost + position_cost + orientation_cost + grasp_cost
 
     def terminal_cost(self, data: mjx.Data) -> jax.Array:
         """The terminal cost ϕ(x_T)."""
-        q = self.diff_ik_mjx.solve(data.qpos)
-        ref_arm_ctrl = q
-        ref_arm_ctrl_cost = jnp.sum(jnp.square(ref_arm_ctrl[:data.ctrl.size] - data.ctrl))
+        ref_qpos = jnp.array(self.ref_qpos)
+        ref_qpos_cost = jnp.sum(jnp.square(ref_qpos - data.qpos[:ref_qpos.size]))
         position_err = self._get_cube_distance_to_grasp(data)
-        return 1000 * ref_arm_ctrl_cost + 100 * jnp.sum(jnp.square(position_err)) + self._get_fingertips_cost(data)
+        return 200 * ref_qpos_cost + 100 * jnp.sum(jnp.square(position_err)) + self._get_fingertips_cost(data)
 
     def _get_obs(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
         grasp_pos = data.site_xpos[self._grasp_site]

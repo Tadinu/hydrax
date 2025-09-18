@@ -35,7 +35,8 @@ class Task(ABC):
             xml_path: Optional[epath.Path] = None,
             u_min: Optional[np.ndarray] = None,
             u_max: Optional[np.ndarray] = None,
-            sim_dt: Optional[float] = 0.01,
+            # NOTE: Purposefully zero here to only override [model.opt] upon valid sim_dt
+            sim_dt: Optional[float] = 0.0,
             ctrl_dt: Optional[float] = 0.01,
             obj_name: Optional[str] = None,
             keyframe: Optional[str] = None,
@@ -82,6 +83,9 @@ class Task(ABC):
         else:
             self._mj_model = self._construct_system_model()
 
+        # Ref trajectory qpos (for cost calculation)
+        self.ref_qpos: np.ndarray = np.zeros(self._mj_model.nq)
+
         # Post init
         self._post_init()
 
@@ -89,7 +93,8 @@ class Task(ABC):
         return None
 
     def _post_init(self) -> None:
-        self._mj_model.opt.timestep = self.sim_dt
+        if self.sim_dt > 0.0:
+            self._mj_model.opt.timestep = self.sim_dt
 
         # MJ-Data
         self._mj_data = mj.MjData(self._mj_model)

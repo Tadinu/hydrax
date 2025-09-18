@@ -124,7 +124,7 @@ if __name__ == "__main__":
     mj_data = task.mj_data
 
     # Run the interactive simulation
-    synchronous = True
+    synchronous = False
     if synchronous:
         sync_run_interactive(
             ctrl,
@@ -132,7 +132,7 @@ if __name__ == "__main__":
             mj_data,
             frequency=25,
             fixed_camera_id=None,
-            show_traces=True,
+            show_traces=False,
             max_traces=1,
             trace_color=[1.0, 1.0, 1.0, 1.0],
         )
