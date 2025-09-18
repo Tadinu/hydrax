@@ -258,8 +258,8 @@ class AdroitHandRelocateEnv(mjx_env.MjxEnv, Task):
         # Distance (m) beyond which we impose a high obj position cost
         self.delta = 0.015
 
-    def _post_init(self, obj_name: Optional[str] = None, keyframe: Optional[str] = None):
-        Task._post_init(self, obj_name, keyframe)
+    def _post_init(self) -> None:
+        Task._post_init(self)
 
         # Robot-specifics
         all_joints = self.ARM_JOINTS + self.HAND_JOINTS

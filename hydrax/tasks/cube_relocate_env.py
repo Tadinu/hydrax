@@ -47,9 +47,9 @@ class CubeRelocateEnv(Task):
         self.FINGER_TIPS_NAMES = ["if_tip", "mf_tip", "rf_tip", "th_tip"]
         super().__init__(
             xml_path=epath.Path(ROOT) / "models" / "leap_hand" / "scene_leap_rh_mjx_relocate_cube.xml",
+            obj_name="cube",
             trace_sites=["grasp_site"] + self.FINGER_TIPS_NAMES,
         )
-        self._post_init(obj_name="cube")
 
         # Move [base_body]
         base_body = self.mj_model.body("leap_mount")
@@ -89,8 +89,8 @@ class CubeRelocateEnv(Task):
         # Task phase
         self.phase: RelocatePhase = RelocatePhase.INITIAL
 
-    def _post_init(self, obj_name: Optional[str] = None, keyframe: Optional[str] = None):
-        Task._post_init(self, obj_name, keyframe)
+    def _post_init(self) -> None:
+        super()._post_init()
 
         # Hand-specifics
         self._init_hand()

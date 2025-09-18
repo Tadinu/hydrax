@@ -79,12 +79,16 @@ class PandaPickEnv(PandaLeapEnv, Task):
                  config: config_dict.ConfigDict = default_config(),
                  config_overrides: Optional[Dict[str, Union[str, int, list[Any]]]] = None,
                  xml_path: Optional[epath.Path] = None,
+                 obj_name: Optional[str] = None,
+                 keyframe: Optional[str] = None,
                  sample_orientation: bool = False,
                  use_ctrl_callback: bool = False):
         if xml_path is None:
             xml_path = epath.Path(ROOT) / "models" / "panda" / "mjx_panda_leap_single_cube.xml"
         super().__init__(config, config_overrides,
                          xml_path=xml_path,
+                         obj_name=obj_name,
+                         keyframe=keyframe,
                          use_ctrl_callback=use_ctrl_callback)
         self.FINGER_TIPS_NAMES = ["leap_rh/if_tip", "leap_rh/mf_tip", "leap_rh/rf_tip", "leap_rh/th_tip"]
         self._sample_orientation = sample_orientation
@@ -337,7 +341,7 @@ class PandaPickEnv(PandaLeapEnv, Task):
 
     def running_cost(self, data: mjx.Data, control: jax.Array) -> jax.Array:
         """The running cost ℓ(xₜ, uₜ)."""
-        q, solver_data = self.diff_ik_mjx.solve(data.qpos, self.diff_ik_mjx.solver_data)
+        q = self.diff_ik_mjx.solve(data.qpos)
         ref_arm_ctrl = q
         ref_arm_ctrl_cost = 1000 * jnp.sum(jnp.square(ref_arm_ctrl[:control.size] - control))
 
@@ -355,7 +359,7 @@ class PandaPickEnv(PandaLeapEnv, Task):
 
     def terminal_cost(self, data: mjx.Data) -> jax.Array:
         """The terminal cost ϕ(x_T)."""
-        q, solver_data = self.diff_ik_mjx.solve(data.qpos, self.diff_ik_mjx.solver_data)
+        q = self.diff_ik_mjx.solve(data.qpos)
         ref_arm_ctrl = q
         ref_arm_ctrl_cost = jnp.sum(jnp.square(ref_arm_ctrl[:data.ctrl.size] - data.ctrl))
         position_err = self._get_cube_distance_to_grasp(data)
@@ -412,7 +416,7 @@ class PandaPickEnv(PandaLeapEnv, Task):
             full_ctrl = full_ctrl[:23]
         else:
             hand_base_pose = f(grasp_site_ctrl)
-            self.diff_ik_mjx.solve(hand_base_pose)
+            self.diff_ik_mjx.last_solved_q = self.diff_ik_mjx.solve(hand_base_pose)
             full_ctrl = self.diff_ik_mjx.last_solved_q
         return full_ctrl
 

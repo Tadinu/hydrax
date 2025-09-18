@@ -53,19 +53,20 @@ class PandaBaseEnv(mjx_env.MjxEnv, Task):
         mjx_env.update_assets(assets, path / "assets")
         return assets
 
-    def __init__(
-            self,
-            config: config_dict.ConfigDict,
-            config_overrides: Optional[Dict[str, Union[str, int, list[Any]]]] = None,
-            xml_path: Optional[epath.Path] = None,
-            use_ctrl_callback: bool = False,
-            trace_sites: Optional[Sequence[str]] = None
-    ):
+    def __init__(self,
+                 config: config_dict.ConfigDict,
+                 config_overrides: Optional[Dict[str, Union[str, int, list[Any]]]] = None,
+                 xml_path: Optional[epath.Path] = None,
+                 obj_name: Optional[str] = None,
+                 keyframe: Optional[str] = None,
+                 trace_sites: Optional[Sequence[str]] = None,
+                 use_ctrl_callback: bool = False):
         super().__init__(config, config_overrides)
-        Task.__init__(self, xml_path=xml_path, sim_dt=config.sim_dt, trace_sites=trace_sites)
-        self._action_scale = config.action_scale
+        if obj_name is None:
+            obj_name = "cube"  # Required for creating model spec
+        if keyframe is None:
+            keyframe = "home"
         self.use_ctrl_callback = use_ctrl_callback
-
         self.ARM_JOINTS = [
             "joint1",
             "joint2",
@@ -75,12 +76,12 @@ class PandaBaseEnv(mjx_env.MjxEnv, Task):
             "joint6",
             "joint7",
         ]
-        self.HAND_JOINTS = ["finger_joint1", "finger_joint2"]
+        self.HAND_JOINTS = []
+        self._action_scale = config.action_scale
+        Task.__init__(self, xml_path=xml_path, sim_dt=config.sim_dt,
+                      obj_name=obj_name, keyframe=keyframe, trace_sites=trace_sites)
 
-        # NOTE: Obj name must be init here & same as in xml for correct keyframe definition, required for spec compiling
-        self._obj_name: str = "cube"
-
-    def _post_init(self, obj_name: Optional[str] = None, keyframe: Optional[str] = None):
+    def _post_init(self) -> None:
         # 1- Init [u_min, u_max]
         if self.use_ctrl_callback:
             self.u_min = np.concatenate([np.array([-1] * 3 + [-1.57] * 3),
@@ -91,7 +92,7 @@ class PandaBaseEnv(mjx_env.MjxEnv, Task):
 
         # 2- Task's [_pos_init]
         # Init [u_min, u_max] here if not create above, so run later
-        Task._post_init(self, obj_name, keyframe)
+        Task._post_init(self)
 
         # Robot-specifics
         all_joints = self.ARM_JOINTS + self.HAND_JOINTS
@@ -103,21 +104,21 @@ class PandaBaseEnv(mjx_env.MjxEnv, Task):
             self._mj_model.jnt_qposadr[self._mj_model.joint(j).id]
             for j in all_joints
         ])
-        self._init_ctrl = self._mj_model.keyframe(keyframe).ctrl
+        self._init_ctrl = self._mj_model.keyframe(self._keyframe).ctrl
         self._lowers, self._uppers = self._mj_model.actuator_ctrlrange.T
 
         # Hand-specifics
         self._init_hand()
 
         # Env-specifics
-        self._obj_body = self._mj_model.body(obj_name).id
-        self._obj_geom = self.mj_model.geom(obj_name).id
+        self._obj_body = self._mj_model.body(self._obj_name).id
+        self._obj_geom = self.mj_model.geom(self._obj_name).id
         self._obj_qposadr = self._mj_model.jnt_qposadr[
-            self._mj_model.body(obj_name).jntadr[0]
+            self._mj_model.body(self._obj_name).jntadr[0]
         ]
         self._mocap_target = self._mj_model.body("target").mocapid
         self._floor_geom = self._mj_model.geom("floor").id
-        self._init_q = self._mj_model.keyframe(keyframe).qpos
+        self._init_q = self._mj_model.keyframe(self._keyframe).qpos
         self._init_obj_pos = jp.array(
             self._init_q[self._obj_qposadr: self._obj_qposadr + 3],
             dtype=jp.float32,
