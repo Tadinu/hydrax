@@ -266,10 +266,10 @@ class PandaLeapEnv(PandaBaseEnv):
             config: config_dict.ConfigDict,
             config_overrides: Optional[Dict[str, Union[str, int, list[Any]]]] = None,
             xml_path: Optional[epath.Path] = None,
+            obj_name: Optional[str] = None,
+            keyframe: Optional[str] = None,
             use_ctrl_callback: bool = False
     ):
-        # NOTE: Don't pass [xml_path] to [PandaBaseEnv] here, since the arm+hand model will be programmingly composed
-        super().__init__(config, config_overrides, use_ctrl_callback=use_ctrl_callback)
         self.arm_xml: str = xml_path.as_posix() if xml_path \
             else ROOT + "/models/panda/mjx_panda_nohand.xml"
         self.hand_xml: str = ROOT + "/models/leap_hand/leap_rh_mjx.xml"
@@ -277,25 +277,21 @@ class PandaLeapEnv(PandaBaseEnv):
         self.hand_spec: mj.MjSpec = None
         self.hand_base_spec: mj.MjsBody = None
 
-        # 0- Init objects (required for model creating spec)
-        self._init_objects()
-
-        # 1- Construct model
-        # -> Init [PandaLeap] specifics
-        self._mj_model = self._construct_system_model()
-
-        # 1.1- Joint names
         self.ARM_JOINTS = PandaLeap.ARM_JOINTS
         self.HAND_JOINTS = PandaLeap.HAND_JOINTS
 
-        # 2- Trace sites
+        # NOTE: Don't pass [xml_path] to [PandaBaseEnv] here, since the arm+hand model will be programmingly composed
+        # -> [self._construct_system_model()] invoked here-in!
+        super().__init__(config, config_overrides,
+                         obj_name=obj_name, keyframe=keyframe,
+                         use_ctrl_callback=use_ctrl_callback)
+
+    def _init_trace_sites(self):
         self.trace_sites += [
             PandaLeap.hand_item_full_name(site)
             for site in ["if_tip", "mf_tip", "rf_tip", "th_tip", "grasp_site"]
         ]
-
-        # 3- Create [mj-data, mjx-model], configuring specifics
-        self._post_init(obj_name="cube", keyframe="home")
+        super()._init_trace_sites()
 
     @property
     def home_qpos(self):
@@ -340,6 +336,10 @@ class PandaLeapEnv(PandaBaseEnv):
         del self.hand_spec
 
     def _construct_system_model(self) -> Optional[mj.MjModel]:
+        # 0- Init objects (required for creating model spec)
+        self._init_objects()
+
+        # 1- Construct model spec
         # https://github.com/google-deepmind/mujoco/blob/main/python/mjspec.ipynb
         # https://mj.readthedocs.io/en/latest/python.html#construction
         self.arm_spec = mj.MjSpec.from_file(self.arm_xml)
@@ -392,7 +392,7 @@ class PandaLeapEnv(PandaBaseEnv):
             # target_body_spec=self.hand_base_spec,
             mocap_name=PandaLeap.EE_TARGET_MOCAP_NAME,
             mocap_geom_type=mj.mjtGeom.mjGEOM_BOX,
-            mocap_size=np.array([0.03] * 3),
+            mocap_size=[0.03] * 3,
             rgba=[1, 0, 1, 1]
         )
 
@@ -408,7 +408,7 @@ class PandaLeapEnv(PandaBaseEnv):
                 # target_body_spec=self.hand_base_spec,
                 mocap_name=f"{fingertip}_target",
                 mocap_geom_type=mj.mjtGeom.mjGEOM_SPHERE,
-                mocap_size=np.array([0.02] * 3),
+                mocap_size=[0.02] * 3,
                 rgba=PandaLeap.FINGER_COLORS[fingertip],
             )
 
@@ -419,8 +419,8 @@ class PandaLeapEnv(PandaBaseEnv):
         self._mj_model = self.arm_spec.compile()
         return self._mj_model
 
-    def _post_init(self, obj_name: Optional[str] = None, keyframe: Optional[str] = None):
-        super()._post_init(obj_name, keyframe)
+    def _post_init(self) -> None:
+        super()._post_init()
 
         # Robot-specifics
         self._q_low_joint_pos_index = 0

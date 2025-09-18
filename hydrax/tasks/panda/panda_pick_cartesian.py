@@ -103,13 +103,13 @@ class PandaPickCubeCartesian(PandaPickEnv):
     ):
         if xml_path is None:
             xml_path = epath.Path(ROOT) / "models" / "panda" / "mjx_single_cube_camera.xml"
-        super().__init__(config, config_overrides, xml_path)
+        super().__init__(config, config_overrides, xml_path,
+                         obj_name='box', keyframe='low_home')
 
         # Modify [mj_model]
         self.modify_model()
 
         # Set gripper in sight of camera
-        self._post_init(obj_name='box', keyframe='low_home')
         self._box_geom = self._mj_model.geom('box').id
 
         # Renderer
@@ -139,8 +139,8 @@ class PandaPickCubeCartesian(PandaPickEnv):
                 viz_gpu_hdls=None,
             )
 
-    def _post_init(self, obj_name, keyframe):
-        super()._post_init(obj_name, keyframe)
+    def _post_init(self) -> None:
+        super()._post_init()
         self._guide_q = self._mj_model.keyframe('picked').qpos
         self._guide_ctrl = self._mj_model.keyframe('picked').ctrl
         # Use forward kinematics to init cartesian control
