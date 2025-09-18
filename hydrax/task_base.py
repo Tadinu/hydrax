@@ -37,6 +37,8 @@ class Task(ABC):
             u_max: Optional[np.ndarray] = None,
             sim_dt: Optional[float] = 0.01,
             ctrl_dt: Optional[float] = 0.01,
+            obj_name: Optional[str] = None,
+            keyframe: Optional[str] = None,
             trace_sites: Optional[Sequence[str]] = None,
         impl: str = "warp",
     ) -> None:
@@ -62,6 +64,8 @@ class Task(ABC):
             self.sim_dt = sim_dt
         if not hasattr(self, "ctrl_dt"):
             self.ctrl_dt = ctrl_dt
+        self._obj_name: str = obj_name
+        self._keyframe: str = keyframe
         self.trace_sites = trace_sites if trace_sites else []
         self.u_min = u_min
         self.u_max = u_max
@@ -76,14 +80,15 @@ class Task(ABC):
             xml = xml_path.read_text()
             self._mj_model = mj.MjModel.from_xml_string(xml, assets=self.get_assets())
         else:
-            print("Mj/Mjx-Models will be created from spec later!")
+            self._mj_model = self._construct_system_model()
 
-        # NOTE: [_pos_init] is expected to be called independently up to specific child class
+        # Post init
+        self._post_init()
 
-    def _post_init(self, obj_name: Optional[str] = None, keyframe: Optional[str] = None) -> None:
-        self._obj_name = obj_name
+    def _construct_system_model(self) -> Optional[mj.MjModel]:
+        return None
 
-        assert self._mj_model is not None
+    def _post_init(self) -> None:
         self._mj_model.opt.timestep = self.sim_dt
 
         # MJ-Data
@@ -109,7 +114,11 @@ class Task(ABC):
             )
 
         # Get site IDs for points we want to trace
-        self.trace_sites += [obj_name]
+        self._init_trace_sites()
+
+    def _init_trace_sites(self):
+        if self._obj_name:
+            self.trace_sites += [self._obj_name]
         self.trace_site_ids = jnp.array(
             [self.mj_model.site(name).id for name in self.trace_sites]
         )

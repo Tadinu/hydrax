@@ -116,13 +116,8 @@ class PandaRobotiqPushCubeEnv(PandaRobotiqBaseEnv):
     ):
         if xml_path is None:
             xml_path = epath.Path(ROOT) / "models" / "panda" / "scene_panda_robotiq_cube.xml"
-        super().__init__(
-            config,
-            config_overrides,
-            xml_path=xml_path,
-            sample_orientation=sample_orientation
-        )
-        self._post_init(obj_name="box", keyframe="home")
+        super().__init__(config, config_overrides, xml_path,
+                         obj_name="box", keyframe="home")
 
     def _get_rand_target_pos(
             self, rng: jax.Array, offset: jax.Array

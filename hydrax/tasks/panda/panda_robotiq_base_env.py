@@ -62,9 +62,12 @@ class PandaRobotiqBaseEnv(PandaBaseEnv):
             self,
             config: config_dict.ConfigDict,
             config_overrides: Optional[Dict[str, Union[str, int, list[Any]]]] = None,
-            xml_path: Optional[epath.Path] = None
+            xml_path: Optional[epath.Path] = None,
+            obj_name: Optional[str] = None,
+            keyframe: Optional[str] = None,
     ):
-        super().__init__(config, config_overrides, xml_path)
+        super().__init__(config, config_overrides, xml_path,
+                         obj_name=obj_name, keyframe=keyframe)
         self.ARM_JOINTS = [
             "joint1",
             "joint2",
@@ -76,8 +79,8 @@ class PandaRobotiqBaseEnv(PandaBaseEnv):
         ]
         self.HAND_JOINTS = ["right_driver_joint", "left_driver_joint"]
 
-    def _post_init(self, obj_name: Optional[str] = None, keyframe: Optional[str] = None):
-        super()._post_init(obj_name, keyframe)
+    def _post_init(self) -> None:
+        super()._post_init()
         # Robot-specifics
         self._q_low_joint_pos_index = 0
         self._q_upper_joint_pos_index = 7

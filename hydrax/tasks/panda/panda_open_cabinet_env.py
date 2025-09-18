@@ -55,25 +55,21 @@ def default_config() -> config_dict.ConfigDict:
     )
 
 
-class PandaOpenCabinetEnv(PandaBaseEnv, Task):
+class PandaOpenCabinetEnv(PandaBaseEnv):
     """Environment for training the Franka Panda robot to bring an object to a
     target."""
 
-    def __init__(
-            self,
-            config: config_dict.ConfigDict = default_config(),
-            config_overrides: Optional[Dict[str, Union[str, int, list[Any]]]] = None,
-            sample_orientation: bool = False,  # pylint: disable=unused-argument
-    ):
+    def __init__(self,
+                 config: config_dict.ConfigDict = default_config(),
+                 config_overrides: Optional[Dict[str, Union[str, int, list[Any]]]] = None,
+                 sample_orientation: bool = False):
         xml_path = ROOT + "models/panda/mjx_cabinet.xml"
-        super().__init__(xml_path, config, config_overrides)
+        super().__init__(config, config_overrides, xml_path,
+                         obj_name="handle", keyframe="upright")
 
         # Enable hand base collision to shape learning
         self.mj_model.geom("hand_capsule").conaffinity = 3
         self._barrier_geom = self._mj_model.geom("barrier").id
-
-        # Create [mj-data, mjx-model], configuring specifics
-        self._post_init(obj_name="handle", keyframe="upright")
 
     def reset(self, rng: jax.Array) -> State:
         """Resets the environment to an initial state."""
