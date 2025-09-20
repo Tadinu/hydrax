@@ -14,7 +14,7 @@ from hydrax.alg_base import SamplingBasedController
 from hydrax.utils.video import VideoRecorder
 
 # mjmanip
-from mjmanip.utils import convert_wrist_to_arm_ctrl
+from mjmanip.robot.arm_hand import ArmHandDiffIK
 
 """
 Tools for deterministic (synchronous) simulation, with the simulator and
@@ -171,7 +171,7 @@ def run_interactive(  # noqa: PLR0912, PLR0915
                 mj_model, ref_data, vopt, pert, catmask, viewer.user_scn
             )
 
-        grasp_site = "leap_rh/grasp_site"
+        grasp_site_name = "leap_rh/grasp_site"
         obj_id = mj_model.body("cube").id
         IDENTITY_WXYZ = np.array([1., 0., 0., 0.])
         while viewer.is_running():
@@ -189,7 +189,7 @@ def run_interactive(  # noqa: PLR0912, PLR0915
             # Do a replanning step
             plan_start = time.time()
             controller.step_callback(mjx_data)
-            controller.task.update_ref_qpos(np.concat([mj_data.xpos[obj_id], mj_data.xquat[obj_id]]))
+            controller.task.update_ref_qpos(np.concatenate([mj_data.xpos[obj_id], mj_data.xquat[obj_id]]))
             policy_params, rollouts = jit_optimize(mjx_data, policy_params)
             plan_time = time.time() - plan_start
 
@@ -240,12 +240,9 @@ def run_interactive(  # noqa: PLR0912, PLR0915
                 if us[i].shape == mj_data.ctrl.shape:
                     mj_data.ctrl[:] = us[i]
                 else:
-                    qvel = np.zeros_like(mj_data.qvel)
-                    qvel[:7] = convert_wrist_to_arm_ctrl(mj_model, mj_data, us[i, :6], grasp_site)
-                    qvel[7:mj_data.ctrl.size] = us[i, 6:]
-                    qpos = mj_data.qpos.copy()
-                    mj.mj_integratePos(mj_model, qpos, qvel, mj_model.opt.timestep)
-                    mj_data.ctrl[:] = qpos[:mj_data.ctrl.size]
+                    mj_data.ctrl[:7] = ArmHandDiffIK.dls_ik(mj_model, mj_data, us[i, :6], grasp_site_name,
+                                                            dt=mj_model.opt.timestep)
+                    mj_data.ctrl[7:] = us[i, 6:]
                 mj.mj_step(mj_model, mj_data)
                 viewer.sync()
 

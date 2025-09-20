@@ -9,7 +9,7 @@ import mujoco.viewer
 import numpy as np
 
 from hydrax.alg_base import SamplingBasedController
-from mjmanip.utils import convert_wrist_to_arm_ctrl
+from mjmanip.robot.arm_hand import ArmHandDiffIK
 
 """
 Utilities for asynchronous simulation, with the simulator and controller running
@@ -212,7 +212,7 @@ def run_simulator(
     obj_id = ctrl.task.mj_model.body("cube").id
     mocap_obj_id = ctrl.task.mj_model.body("target").id
     mocap_id = ctrl.task.mj_model.body_mocapid[obj_id]
-    IDENTITY_WXYZ = np.array([1., 0., 0., 0.])
+    DEFAULT_WXYZ = np.array([0., 1., 0., 0.])
     with mujoco.viewer.launch_passive(mj_model, mj_data) as viewer:
         while viewer.is_running():
             start_time = time.time()
@@ -227,23 +227,19 @@ def run_simulator(
                 shm_data.mocap_pos[:] = mj_data.mocap_pos
                 shm_data.mocap_quat[:] = mj_data.mocap_quat
 
-            ctrl.task.update_ref_qpos(np.concat([mj_data.xpos[obj_id], IDENTITY_WXYZ]))
+            ctrl.task.update_ref_qpos(np.concatenate([mj_data.xpos[obj_id], DEFAULT_WXYZ]))
             shm_data.ref_arm_qpos[:] = np.asarray(ctrl.task.ref_qpos)
 
             # Read the lastest control values from shared memory
             # TODO: actually query the spline rather than assuming zero-order
             # hold and a sufficiently high control rate
-            mj_data.ctrl[:] = shm_data.ctrl[:]
-            if False:
+            if ctrl.ctrl_callback:
                 mj_data.ctrl[7:] = shm_data.hand_ctrl[:]
-                mj_data.ctrl[:7] = convert_wrist_to_arm_ctrl(mj_model, mj_data, shm_data.wrist_ctrl[:],
-                                                             grasp_site="leap_rh/grasp_site")
-
-                qpos = mj_data.qpos.copy()
-                qvel = np.zeros_like(mj_data.qvel)
-                qvel[:7] = mj_data.ctrl[:7]
-                mj.mj_integratePos(mj_model, qpos, qvel, mj_model.opt.timestep)
-                mj_data.ctrl[:7] = qpos[:7]
+                mj_data.ctrl[:7] = ArmHandDiffIK.dls_ik(mj_model, mj_data, shm_data.wrist_ctrl[:],
+                                                        grasp_site_name="leap_rh/grasp_site",
+                                                        dt=mj_model.opt.timestep)
+            else:
+                mj_data.ctrl[:] = shm_data.ctrl[:]
 
             # Step the simulation
             mj.mj_step(mj_model, mj_data)
