@@ -1,7 +1,7 @@
 import os
 
 from abc import ABC, abstractmethod
-from typing import Dict, Sequence, Optional
+from typing import Callable, Dict, Sequence, Optional, Union
 from etils import epath
 
 import numpy as np
@@ -68,7 +68,8 @@ class Task(ABC):
         self.warp_enabled = warp_enabled
         self.u_min = u_min
         self.u_max = u_max
-        self.num_ctrls: int = u_min.shape[0] if u_min is not None else 0
+        self.num_ctrls: int = u_min.size if u_min is not None else 0
+        self.ctrl_callback: Optional[Callable[[mjx.Data, jax.Array], jax.Array]] = None
 
         # MJ-Model
         if mj_model is not None:
@@ -147,6 +148,9 @@ class Task(ABC):
         return 0
 
     def step_callback(self, state: mjx.Data):
+        pass
+
+    def update_ref_qpos(self, ee_pose: Optional[Union[np.ndarray, jnp.ndarray]] = None) -> None:
         pass
 
     @abstractmethod
