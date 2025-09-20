@@ -18,7 +18,7 @@ if __name__ == "__main__":
     """
 
     # Define the task (cost and dynamics)
-    use_ctrl_callback = False
+    use_ctrl_callback = True
     task = PandaPickEnv(use_ctrl_callback=use_ctrl_callback)
 
     # Parse command-line arguments
@@ -72,7 +72,7 @@ if __name__ == "__main__":
             spline_type="zero",
             num_knots=4,
             # iterations=1,
-            ctrl_callback=task.mjx_convert_free_hand_to_full_arm_hand_ctrl if use_ctrl_callback else None
+            ctrl_callback=task.ctrl_callback if use_ctrl_callback else None
         )
     elif args.algorithm == "icem":
         print("Running ICEM")

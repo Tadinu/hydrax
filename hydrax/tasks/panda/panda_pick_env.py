@@ -92,6 +92,7 @@ class PandaPickEnv(PandaLeapEnv, Task):
                          use_ctrl_callback=use_ctrl_callback)
         self.FINGER_TIPS_NAMES = ["leap_rh/if_tip", "leap_rh/mf_tip", "leap_rh/rf_tip", "leap_rh/th_tip"]
         self._sample_orientation = sample_orientation
+        self.ctrl_callback = self.mjx_convert_free_hand_to_full_arm_hand_ctrl
         self._init_ik()
 
         # Get sensor ids
@@ -148,8 +149,8 @@ class PandaPickEnv(PandaLeapEnv, Task):
     def update_ref_qpos(self, ee_pose: Optional[Union[np.ndarray, jnp.ndarray]] = None):
         if ee_pose is None:
             obj = self.mj_data.body(self._obj_name)
-            IDENTITY_WXYZ = np.array([1., 0., 0., 0.])
-            ee_pose = np.concatenate([obj.xpos, IDENTITY_WXYZ])
+            DEFAULT_WXYZ = np.array([0., 1., 0., 0.])
+            ee_pose = np.concatenate([obj.xpos, DEFAULT_WXYZ])
         self.ref_qpos = self.diff_ik.plan(task_ee_pose=np.asarray(ee_pose))
 
     def reset(self, rng: jax.Array) -> State:
@@ -219,8 +220,8 @@ class PandaPickEnv(PandaLeapEnv, Task):
 
     def step_callback(self, mjx_data: mjx.Data):
         if self.diff_ik_mjx:
-            self.diff_ik_mjx.step_callback(task_ee_pose=np.concatenate([self._get_cube_position(mjx_data),
-                                                                        self._get_cube_orientation(mjx_data)]))
+            self.diff_ik_mjx.update_tasks(ee_pose=jnp.concatenate([self._get_cube_position(mjx_data),
+                                                                   self._get_cube_orientation(mjx_data)]))
 
     def step(self, state: State, action: jax.Array) -> State:
         delta = action * self._action_scale
@@ -355,11 +356,20 @@ class PandaPickEnv(PandaLeapEnv, Task):
         cost = -0.05 * self._get_obj_contact_with_finger_tips(data)
         return cost
 
+    # Ref traj cost
+    def _get_ref_traj_cost(self, data: mjx.Data) -> jax.Array:
+        if self.use_ctrl_callback:
+            return jnp.zeros(1)
+        else:
+            ref_qpos = jnp.array(self.ref_qpos[:7])
+            square_ref_arm_pos_distance = jnp.sum(jnp.square(ref_qpos - data.qpos[:ref_qpos.size]))
+            return 1000 * jnp.maximum(
+                square_ref_arm_pos_distance - 1 ** 2, 0.0
+            )
+
     def running_cost(self, data: mjx.Data, control: jax.Array) -> jax.Array:
         """The running cost ℓ(xₜ, uₜ)."""
-        ref_qpos = jnp.array(self.ref_qpos)
-        square_ref_arm_pos_distance = jnp.sum(jnp.square(ref_qpos - data.qpos[:ref_qpos.size]))
-        ref_qpos_cost = 200 * square_ref_arm_pos_distance
+        ref_qpos_cost = self._get_ref_traj_cost(data)
 
         position_err = self._get_cube_distance_to_grasp(data)
         squared_distance = jnp.sum(jnp.square(position_err[0:2]))  # ignore z
@@ -375,10 +385,9 @@ class PandaPickEnv(PandaLeapEnv, Task):
 
     def terminal_cost(self, data: mjx.Data) -> jax.Array:
         """The terminal cost ϕ(x_T)."""
-        ref_qpos = jnp.array(self.ref_qpos)
-        ref_qpos_cost = jnp.sum(jnp.square(ref_qpos - data.qpos[:ref_qpos.size]))
+        ref_qpos_cost = self._get_ref_traj_cost(data)
         position_err = self._get_cube_distance_to_grasp(data)
-        return 200 * ref_qpos_cost + 100 * jnp.sum(jnp.square(position_err)) + self._get_fingertips_cost(data)
+        return ref_qpos_cost + 100 * jnp.sum(jnp.square(position_err)) + self._get_fingertips_cost(data)
 
     def _get_obs(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
         grasp_pos = data.site_xpos[self._grasp_site]
@@ -411,13 +420,13 @@ class PandaPickEnv(PandaLeapEnv, Task):
         return mjx._src.forward._integrate_pos(self.mjx_model.jnt_type, qpos, qvel, dt)
 
     @partial(jit, static_argnums=(0,))
-    def mjx_convert_free_hand_to_full_arm_hand_ctrl(self, data: mjx.Data, u: jnp.ndarray) -> jnp.ndarray:
+    def mjx_convert_free_hand_to_full_arm_hand_ctrl(self, mjx_data: mjx.Data, u: jnp.ndarray) -> jnp.ndarray:
         hand_ctrl = u[6:]
         grasp_site_ctrl = u[:6]
         full_ctrl = None
         if True:
-            jacp, jacr = mjx.jac(self.mjx_model, data,
-                                 data.site_xpos[self._grasp_site].ravel(),
+            jacp, jacr = mjx.jac(self.mjx_model, mjx_data,
+                                 mjx_data.site_xpos[self._grasp_site].ravel(),
                                  self.mjx_model.site_bodyid[self._grasp_site])
             J = jnp.vstack([jacp.T, jacr.T])  # (6, nv)
 
@@ -426,8 +435,8 @@ class PandaPickEnv(PandaLeapEnv, Task):
             diag = (damp ** 2) * jnp.eye(6)
             JJt = J @ J.T
             full_ctrl = J.T @ jnp.linalg.solve(JJt + diag, grasp_site_ctrl)
+            full_ctrl = self.mjx_integrate_pos(mjx_data.qpos.copy(), full_ctrl.copy(), self.mj_model.opt.timestep)
             full_ctrl = full_ctrl.at[7:23].set(hand_ctrl)
-            full_ctrl = self.mjx_integrate_pos(data.qpos.copy(), full_ctrl.copy(), self.mjx_model.opt.timestep)
             full_ctrl = full_ctrl[:23]
         else:
             hand_base_pose = f(grasp_site_ctrl)

@@ -262,17 +262,17 @@ class SamplingBasedController(ABC):
             """Compute the cost and observation, then advance the state."""
 
             def valid_cb(args):
-                x, u, cb = args
-                return cb(x, u) if cb else u
+                x, u = args
+                return self.ctrl_callback(x, u) if self.ctrl_callback else jnp.zeros(model.nu)
 
             def void_cb(args):
-                x, u, cb = args
-                return u
+                x, u = args
+                return u if u.size == model.nu else jnp.zeros(model.nu)
 
             ctrl = jax.lax.cond(self.ctrl_callback is not None,
                                 valid_cb,
                                 void_cb,
-                                (x, u, self.ctrl_callback))
+                                (x, u))
             x = x.replace(ctrl=ctrl)
             x = mjx.step(model, x)  # step model + compute site positions
             cost = self.dt * self.task.running_cost(x, ctrl)
