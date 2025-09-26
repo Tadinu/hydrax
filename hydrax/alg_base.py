@@ -239,6 +239,7 @@ class SamplingBasedController(ABC):
             state: mjx.Data,
             controls: jax.Array,
             knots: jax.Array,
+            n_substeps: int = 1
     ) -> Tuple[mjx.Data, Trajectory]:
         """Rollout control sequences (in parallel) and compute the costs.
 
@@ -247,7 +248,7 @@ class SamplingBasedController(ABC):
             state: The initial state x₀.
             controls: The control sequences, (num rollouts, H, nu).
             knots: The control spline knots, (num rollouts, num_knots, nu).
-
+            n_substeps: The number of steps per rollout.
         Returns:
             The states (stacked) experienced during the rollouts.
             A Trajectory object containing the control, costs, and trace sites.
@@ -268,8 +269,13 @@ class SamplingBasedController(ABC):
                                 valid_cb,
                                 void_cb,
                                 (x, u))
-            x = x.replace(ctrl=ctrl)
-            x = mjx.step(model, x)  # step model + compute site positions
+
+            def single_step(data, _):
+                data = data.replace(ctrl=ctrl)
+                data = mjx.step(model, data)
+                return data, None
+
+            x = jax.lax.scan(single_step, x, (), n_substeps)[0]
             cost = self.dt * self.task.running_cost(x, ctrl)
             sites = self.task.get_trace_sites(x)
             next_phase = self.task.next_phase(x)
