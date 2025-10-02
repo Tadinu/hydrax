@@ -193,6 +193,9 @@ class Task(ABC):
 
         return state.site_xpos[self.trace_site_ids]
 
+    def get_base_pose(self, state: mjx.Data) -> jnp.ndarray:
+        return jnp.zeros(7)
+
     def domain_randomize_model(self, rng: jax.Array) -> Dict[str, jax.Array]:
         """Generate randomized model parameters for domain randomization.
 
