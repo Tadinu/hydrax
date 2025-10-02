@@ -27,17 +27,25 @@ class Trajectory:
         controls: Control actions of shape (num_rollouts, H, nu).
         knots: Control spline knots of shape (num_rollouts, num_knots, nu).
         costs: Costs of shape (num_rollouts, H+1).
-        trace_sites: Positions of trace sites of shape (num_rollouts, H+1, 3).
+        trace_sites: Poses of trace sites of shape (num_rollouts, H+1, 3).
+        base_poses: Poses of agent base (num_rollouts, H+1, 7).
     """
 
     controls: jax.Array
     knots: jax.Array
     costs: jax.Array
     trace_sites: jax.Array
+    base_poses: jax.Array
 
     def __len__(self):
         """Return the number of time steps in the trajectory (T)."""
         return self.costs.shape[-1] - 1
+
+    def print(self):
+        print("Control", self.controls.shape)  # num_samples, horizon (ctrl_steps), num_ctrls
+        print("Knots", self.knots.shape)
+        print("Costs", self.costs.shape)
+        print("Base poses", self.base_poses.shape)
 
 
 @dataclass
@@ -212,9 +220,9 @@ class SamplingBasedController(ABC):
             )
             states = states.tree_replace(randomizations)
 
-        # compute the control sequence from the knots
+        # Compute the control sequence from the knots
         tq = jnp.linspace(tk[0], tk[-1], self.ctrl_steps)
-        controls = self.interp_func(tq, tk, knots)  # (num_rollouts, H, self.num_ctrls)
+        controls = self.interp_func(tq, tk, knots)  # (num_rollouts, self.ctrl_steps, self.num_ctrls)
 
         # Apply the control sequences, parallelized over both rollouts and
         # domain randomizations.
@@ -224,12 +232,16 @@ class SamplingBasedController(ABC):
 
         # Combine the costs from different domain randomizations using the
         # specified risk strategy.
+        # (self.num_randomizations, self.num_samples, self.ctrl_steps) -> (self.num_samples, self.ctrl_steps)
         costs = self.risk_strategy.combine_costs(rollouts.costs)
         controls = rollouts.controls[0]  # identical over randomizations
         knots = rollouts.knots[0]  # identical over randomizations
         trace_sites = rollouts.trace_sites[0]  # visualization only, take 1st
+
+        # (self.num_randomizations, self.num_samples, self.ctrl_steps, 7) -> (self.num_samples, self.ctrl_steps, 7)
+        base_poses = jnp.mean(rollouts.base_poses, axis=0)
         return rollouts.replace(
-            costs=costs, controls=controls, knots=knots, trace_sites=trace_sites
+            costs=costs, controls=controls, knots=knots, trace_sites=trace_sites, base_poses=base_poses
         )
 
     @partial(jax.vmap, in_axes=(None, None, None, 0, 0))
@@ -254,7 +266,7 @@ class SamplingBasedController(ABC):
             A Trajectory object containing the control, costs, and trace sites.
         """
 
-        def _scan_fn(x: mjx.Data, u: jax.Array) -> Tuple[mjx.Data, Tuple[mjx.Data, jax.Array, jax.Array]]:
+        def _scan_fn(x: mjx.Data, u: jax.Array) -> Tuple[mjx.Data, Tuple[mjx.Data, jax.Array, jax.Array, jax.Array]]:
             """Compute the cost and observation, then advance the state."""
 
             def valid_cb(args):
@@ -278,24 +290,29 @@ class SamplingBasedController(ABC):
             x = jax.lax.scan(single_step, x, (), n_substeps)[0]
             cost = self.dt * self.task.running_cost(x, ctrl)
             sites = self.task.get_trace_sites(x)
+            base_pose = self.task.get_base_pose(x)
             next_phase = self.task.next_phase(x)
             x = x.replace(userdata=jnp.array([next_phase], dtype=jnp.float32))
-            return x, (x, cost, sites)
+            return x, (x, cost, sites, base_pose)
 
-        final_state, (states, costs, trace_sites) = jax.lax.scan(
+        final_state, (states, costs, trace_sites, base_poses) = jax.lax.scan(
             _scan_fn, state, controls
         )
         final_cost = self.task.terminal_cost(final_state)
         final_trace_sites = self.task.get_trace_sites(final_state)
+        final_base_pose = self.task.get_base_pose(final_state)
+        final_base_pose = jnp.reshape(final_base_pose, (1, final_base_pose.size))
 
         costs = jnp.append(costs, final_cost)
         trace_sites = jnp.append(trace_sites, final_trace_sites[None], axis=0)
+        base_poses = jnp.append(base_poses, final_base_pose, axis=0)
 
         return states, Trajectory(
             controls=controls,
             knots=knots,
             costs=costs,
             trace_sites=trace_sites,
+            base_poses=base_poses
         )
 
     def init_params(
