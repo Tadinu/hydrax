@@ -77,9 +77,9 @@
     <framequat name="cube_orientation" objtype="body" objname="cube"/>
     <framequat name="cube_orientation_from_target" objtype="body" objname="cube" reftype="body" refname="target"/>
     <framepos name="grasp_distance_from_target" objtype="site" objname="grasp_site" reftype="body" refname="target"/>
-    <framelinvel name="cube_linvel" objtype="body" objname="cube"/>
-    <frameangvel name="cube_angvel" objtype="body" objname="cube"/>
-    <frameangacc name="cube_angacc" objtype="body" objname="cube"/>
+    <framelinvel name="cube_linear_vel" objtype="body" objname="cube"/>
+    <frameangvel name="cube_angular_vel" objtype="body" objname="cube"/>
+    <frameangacc name="cube_angular_acc" objtype="body" objname="cube"/>
     <framezaxis name="cube_upvector" objtype="body" objname="cube"/>
 
     <!-- hand. -->

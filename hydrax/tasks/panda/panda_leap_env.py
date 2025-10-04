@@ -350,7 +350,8 @@ class PandaLeapEnv(PandaBaseEnv):
         print("SYSTEM MODEL NAME: ", self.arm_spec.modelname)
         PandaLeap.ARM_BODIES_NAMES = [body.name for body in self.arm_spec.bodies]
         # Disable arm's bodies collision
-        mj_set_body_tree_collision_enabled(self.arm_spec.bodies[1], False)
+        # NOTE: This may disrupt already-setup collision from XML
+        # mj_set_body_tree_collision_enabled(self.arm_spec.bodies[1], False)
 
         self.hand_spec = mj.MjSpec.from_file(self.hand_xml)
         PandaLeap.HAND_MODEL_NAME = self.hand_spec.modelname
