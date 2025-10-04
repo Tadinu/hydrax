@@ -119,6 +119,12 @@ class PandaPickEnv(PandaLeapEnv, Task):
         self.cube_orientation_from_target_sensor = mj.mj_name2id(
             self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_orientation_from_target"
         )
+        self.cube_linear_velocity_sensor = mj.mj_name2id(
+            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_linear_vel"
+        )
+        self.cube_angular_velocity_sensor = mj.mj_name2id(
+            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_angular_vel"
+        )
         self.finger_tip_distance_to_cube_sensors = [mj.mj_name2id(
             self.mj_model, mj.mjtObj.mjOBJ_SENSOR, f"{finger_tip}_position") for finger_tip in self.FINGER_TIPS_NAMES
         ]
@@ -134,24 +140,26 @@ class PandaPickEnv(PandaLeapEnv, Task):
         use_diff_ik_mjx = False
         self.diff_ik_mjx = None
         self.diff_ik = None
-        if use_diff_ik_mjx:
-            self.diff_ik_mjx = ArmHandDiffIKMjx(model=self.mj_model, data=self.mj_data,
-                                                world_class=PandaLeapMjx,
-                                                q0=jnp.array(self.home_qpos),
-                                                mjx_model=self.mjx_model)
-            self.diff_ik_mjx.init()
-        else:
-            self.diff_ik = ArmHandDiffIK(model=self.mj_model, data=self.mj_data,
-                                         world_class=PandaLeapMjx,
-                                         q0=PandaLeap.HOME_QPOS)
-            self.diff_ik.init()
+        if False:
+            if use_diff_ik_mjx:
+                self.diff_ik_mjx = ArmHandDiffIKMjx(model=self.mj_model, data=self.mj_data,
+                                                    world_class=PandaLeapMjx,
+                                                    q0=jnp.array(self.home_qpos),
+                                                    mjx_model=self.mjx_model)
+                self.diff_ik_mjx.init()
+            else:
+                self.diff_ik = ArmHandDiffIK(model=self.mj_model, data=self.mj_data,
+                                             world_class=PandaLeapMjx,
+                                             q0=PandaLeap.HOME_QPOS)
+                self.diff_ik.init()
 
     def update_ref_qpos(self, ee_pose: Optional[Union[np.ndarray, jnp.ndarray]] = None):
-        if ee_pose is None:
-            obj = self.mj_data.body(self._obj_name)
-            DEFAULT_WXYZ = np.array([0., 1., 0., 0.])
-            ee_pose = np.concatenate([obj.xpos, DEFAULT_WXYZ])
-        self.ref_qpos = self.diff_ik.plan(task_ee_pose=np.asarray(ee_pose))
+        if self.diff_ik:
+            if ee_pose is None:
+                obj = self.mj_data.body(self._obj_name)
+                DEFAULT_WXYZ = np.array([0., 1., 0., 0.])
+                ee_pose = np.concatenate([obj.xpos, DEFAULT_WXYZ])
+            self.ref_qpos = self.diff_ik.plan(task_ee_pose=np.asarray(ee_pose))
 
     def reset(self, rng: jax.Array) -> State:
         rng, rng_box, rng_target = jax.random.split(rng, 3)
@@ -338,6 +346,11 @@ class PandaPickEnv(PandaLeapEnv, Task):
         goal_relative_quat = jnp.array([1.0, 0.0, 0.0, 0.0])
         return jnp.sum(jnp.square(mjx._src.math.quat_sub(cube_relative_to_target_quat, goal_relative_quat)))
 
+    def _get_cube_velocity(self, data: mjx.Data) -> jax.Array:
+        """Velocity of the cube relative to the target grasp orientation."""
+        sensor_adr = self.mjx_model.sensor_adr[self.cube_linear_velocity_sensor]
+        return data.sensordata[sensor_adr: sensor_adr + 3]
+
     def _get_finger_tips_distance_to_cube(self, data: mjx.Data) -> jax.Array:
         """Distance of the fingertips from the object."""
         sensor_adrs = [self.mjx_model.sensor_adr[s] for s in self.finger_tip_distance_to_cube_sensors]
@@ -353,7 +366,7 @@ class PandaPickEnv(PandaLeapEnv, Task):
     # Fingertips total cost
     def _get_fingertips_cost(self, data: mjx.Data) -> jax.Array:
         # cost = 50 * self._get_finger_tips_distance_to_obj(data)
-        cost = -0.05 * self._get_obj_contact_with_finger_tips(data)
+        cost = -0.5 * self._get_obj_contact_with_finger_tips(data)
         return cost
 
     # Ref traj cost
@@ -361,6 +374,7 @@ class PandaPickEnv(PandaLeapEnv, Task):
         if self.use_ctrl_callback:
             return jnp.zeros(1)
         else:
+            return jnp.zeros(1)
             ref_qpos = jnp.array(self.ref_qpos[:7])
             square_ref_arm_pos_distance = jnp.sum(jnp.square(ref_qpos - data.qpos[:ref_qpos.size]))
             return 1000 * jnp.maximum(
@@ -381,13 +395,16 @@ class PandaPickEnv(PandaLeapEnv, Task):
         orientation_cost = 50 * self._get_cube_orientation_distance_to_target(data)
 
         grasp_cost = 0.001 * jnp.sum(jnp.square(control)) + self._get_fingertips_cost(data)
-        return ref_qpos_cost + position_cost + orientation_cost + grasp_cost
+        obj_vel_cost = 10 * jnp.sum(jnp.square(self._get_cube_velocity(data)))
+        return ref_qpos_cost + position_cost + orientation_cost + grasp_cost + obj_vel_cost
 
     def terminal_cost(self, data: mjx.Data) -> jax.Array:
         """The terminal cost ϕ(x_T)."""
         ref_qpos_cost = self._get_ref_traj_cost(data)
         position_err = self._get_cube_distance_to_grasp(data)
-        return ref_qpos_cost + 100 * jnp.sum(jnp.square(position_err)) + self._get_fingertips_cost(data)
+        grasp_cost = self._get_fingertips_cost(data)
+        obj_vel_cost = 10 * jnp.sum(jnp.square(self._get_cube_velocity(data)))
+        return ref_qpos_cost + 100 * jnp.sum(jnp.square(position_err)) + grasp_cost + obj_vel_cost
 
     def _get_obs(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
         grasp_pos = data.site_xpos[self._grasp_site]
@@ -405,15 +422,6 @@ class PandaPickEnv(PandaLeapEnv, Task):
             data.ctrl - data.qpos[self._robot_qposadr[:-1]],
         ])
         return obs
-
-    def domain_randomize_model(self, rng: jax.Array) -> Dict[str, jax.Array]:
-        """Randomize the friction parameters."""
-        n_geoms = self.mjx_model.geom_friction.shape[0]
-        multiplier = jax.random.uniform(rng, (n_geoms,), minval=0.5, maxval=2.0)
-        new_frictions = self.mjx_model.geom_friction.at[:, 0].set(
-            self.mjx_model.geom_friction[:, 0] * multiplier
-        )
-        return {"geom_friction": new_frictions}
 
     @partial(jit, static_argnums=(0,))
     def mjx_integrate_pos(self, qpos: jnp.ndarray, qvel: jnp.ndarray, dt: float) -> jnp.ndarray:

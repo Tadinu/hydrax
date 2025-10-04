@@ -19,6 +19,7 @@
 from typing import Any, Dict, Optional, Union, Sequence
 from etils import epath
 
+import jax
 import jax.numpy as jp
 from ml_collections import config_dict
 import mujoco as mj
@@ -176,3 +177,24 @@ class PandaBaseEnv(mjx_env.MjxEnv, Task):
             [-1.0, 1.0],
             [-1.0, 1.0],
         ]
+
+    def domain_randomize_model(self, rng: jax.Array) -> Dict[str, jax.Array]:
+        """Randomize the friction parameters."""
+        n_geoms = self.mjx_model.geom_friction.shape[0]
+        multiplier = jax.random.uniform(rng, (n_geoms,), minval=0.5, maxval=2.0)
+        new_frictions = self.mjx_model.geom_friction.at[:, 0].set(
+            self.mjx_model.geom_friction[:, 0] * multiplier
+        )
+        return {"geom_friction": new_frictions}
+
+    def domain_randomize_data(self, data: mjx.Data, rng: jax.Array) -> Dict[str, jax.Array]:
+        """Randomly shift the measured configurations."""
+        if False:
+            """Add noise to the state estimate."""
+            rng, q_rng, v_rng = jax.random.split(rng, 3)
+            q_err = 0.01 * jax.random.normal(q_rng, (self.mjx_model.nq,))
+            v_err = 0.01 * jax.random.normal(v_rng, (self.mjx_model.nv,))
+            return {"qpos": data.qpos + q_err, "qvel": data.qvel + v_err}
+        else:
+            shift = 0.005 * jax.random.normal(rng, (self.mjx_model.nq,))
+            return {"qpos": data.qpos + shift}

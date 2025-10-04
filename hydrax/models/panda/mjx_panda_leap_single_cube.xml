@@ -20,6 +20,8 @@
     <framepos name="cube_distance_to_target" objtype="body" objname="cube" reftype="body" refname="target"/>
     <framequat name="cube_orientation" objtype="body" objname="cube"/>
     <framequat name="cube_orientation_from_target" objtype="body" objname="cube" reftype="body" refname="target"/>
+    <framelinvel name="cube_linear_vel" objtype="body" objname="cube"/>
+    <frameangvel name="cube_angular_vel" objtype="body" objname="cube"/>
 
     <!-- hand. -->
     <framepos name="palm_position" objtype="site" objname="leap_rh/grasp_site"/>

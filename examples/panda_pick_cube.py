@@ -18,7 +18,7 @@ if __name__ == "__main__":
     """
 
     # Define the task (cost and dynamics)
-    use_ctrl_callback = True
+    use_ctrl_callback = False
     task = PandaPickEnv(use_ctrl_callback=use_ctrl_callback)
 
     # Parse command-line arguments
@@ -124,7 +124,7 @@ if __name__ == "__main__":
     mj_data = task.mj_data
 
     # Run the interactive simulation
-    synchronous = False
+    synchronous = True
     if synchronous:
         sync_run_interactive(
             ctrl,
