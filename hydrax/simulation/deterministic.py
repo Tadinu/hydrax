@@ -172,7 +172,7 @@ def run_interactive(  # noqa: PLR0912, PLR0915
             )
 
         grasp_site_name = "leap_rh/grasp_site"
-        obj_id = mj_model.body("cube").id
+        obj = mj_data.body("cube")
         IDENTITY_WXYZ = np.array([1., 0., 0., 0.])
         while viewer.is_running():
             start_time = time.time()
@@ -189,7 +189,7 @@ def run_interactive(  # noqa: PLR0912, PLR0915
             # Do a replanning step
             plan_start = time.time()
             controller.step_callback(mjx_data)
-            controller.task.update_ref_qpos(np.concatenate([mj_data.xpos[obj_id], mj_data.xquat[obj_id]]))
+            controller.task.update_ref_qpos(np.concatenate([obj.xpos, obj.xquat]))
             policy_params, rollouts = jit_optimize(mjx_data, policy_params)
             plan_time = time.time() - plan_start
 
