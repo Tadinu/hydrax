@@ -79,7 +79,8 @@ def run_interactive(  # noqa: PLR0912, PLR0915
     actual_frequency = 1.0 / step_dt
     print(
         f"Planning at {actual_frequency} Hz, "
-        f"simulating at {1.0 / mj_model.opt.timestep} Hz"
+        f"simulating at {1.0 / mj_model.opt.timestep} Hz "
+        f"sim_steps_per_replan: {sim_steps_per_replan}"
     )
 
     # Create a data structure for the controller to run rollouts from.
