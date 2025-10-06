@@ -80,12 +80,21 @@ def run_interactive(  # noqa: PLR0912, PLR0915
     actual_frequency = 1.0 / step_dt
     print(
         f"Planning at {actual_frequency} Hz, "
-        f"simulating at {1.0 / mj_model.opt.timestep} Hz"
+        f"simulating at {1.0 / mj_model.opt.timestep} Hz "
+        f"sim_steps_per_replan: {sim_steps_per_replan}"
     )
 
     # Initialize the controller
-    mjx_data = mjx.put_data(mj_model, mj_data, impl='warp') if controller.task.warp_enabled \
-        else mjx.put_data(mj_model, mj_data)
+    # TODO: mjx.put_data() does not support [Warp] yet
+    if controller.task.warp_enabled:
+        mjx_impl = controller.task.mjx_impl
+        assert mjx_impl == 'warp'
+        mjx_data = mjx.make_data(mj_model, impl=mjx_impl, nconmax=100 * 8192, njmax=200)
+        mjx_data = mjx_data.replace(
+            qpos=mj_data.qpos, qvel=mj_data.qvel, ctrl=mj_data.ctrl
+        )
+    else:
+        mjx_data = mjx.put_data(mj_model, mj_data)
     mjx_data = mjx_data.replace(
         mocap_pos=mj_data.mocap_pos, mocap_quat=mj_data.mocap_quat
     )

@@ -140,6 +140,10 @@ class Task(ABC):
     def mjx_model(self) -> mjx.Model:
         return self._mjx_model
 
+    @property
+    def mjx_impl(self) -> Optional[str]:
+        return self._mjx_model.impl.value if self._mjx_model else None
+
     @property  # -> Consistent with co-parent [mjx_env.MjxEnv]
     def xml_path(self) -> str:
         return self._xml_path
@@ -177,6 +181,21 @@ class Task(ABC):
             The scalar terminal cost ϕ(x_T).
         """
         pass
+
+    def __print_sensors_dim(self, sensor_ids: dict[str, int]) -> None:
+        print({name: self.mj_model.sensor_dim[i] for name, i in sensor_ids.items()})
+
+    def get_sensor_data(self, mjx_data: mjx.Data, sensor_id: int, start: int = 0, end: int = 0) -> jax.Array:
+        """Get sensor data given sensor id."""
+        # NOTE: Don't use [self.mjx_model], which may give incorrect adr if [warp_enabled] (This may be solved on future release)
+        sensor_adr = self.mj_model.sensor_adr[sensor_id]
+        sensor_dim = self.mj_model.sensor_dim[sensor_id]
+        return mjx_data.sensordata[sensor_adr + start: sensor_adr + (end if end else sensor_dim)]
+
+    def get_sensor_data_by_name(self, mjx_data: mjx.Data, sensor_name: str, start: int = 0, end: int = 0) -> jax.Array:
+        """Get sensor data given sensor name."""
+        sensor_id = self.mj_model.sensor(sensor_name).id
+        return self.get_sensor_data(mjx_data, sensor_id, start, end)
 
     def get_trace_sites(self, state: mjx.Data) -> jax.Array:
         """Get the positions of the trace sites at the current time step.
