@@ -61,7 +61,8 @@ class PandaBaseEnv(mjx_env.MjxEnv, Task):
                  obj_name: Optional[str] = None,
                  keyframe: Optional[str] = None,
                  trace_sites: Optional[Sequence[str]] = None,
-                 use_ctrl_callback: bool = False):
+                 use_ctrl_callback: bool = False,
+                 warp_enabled: bool = False):
         super().__init__(config, config_overrides)
         if obj_name is None:
             obj_name = "cube"  # Required for creating model spec
@@ -80,7 +81,8 @@ class PandaBaseEnv(mjx_env.MjxEnv, Task):
         self.HAND_JOINTS = []
         self._action_scale = config.action_scale
         Task.__init__(self, xml_path=xml_path, sim_dt=config.sim_dt,
-                      obj_name=obj_name, keyframe=keyframe, trace_sites=trace_sites)
+                      obj_name=obj_name, keyframe=keyframe, trace_sites=trace_sites,
+                      warp_enabled=warp_enabled)
 
     def _post_init(self) -> None:
         # 1- Init [u_min, u_max]

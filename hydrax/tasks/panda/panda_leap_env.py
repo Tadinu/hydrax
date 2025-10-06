@@ -30,6 +30,8 @@ class PandaLeap:
     ARM_DOFS_NO = len(ARM_HOME_QPOS)
     ARM_BODIES_NAMES = []
     ARM_JOINTS = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6", "joint7"]
+    ARM_GEOMS = ["link0_c", "link1_c", "link2_c", "link3_c", "link4_c", "link5_c0", "link5_c1", "link5_c2", "link6_c",
+                 "link7_c"]
 
     # leap hand
     # To be determined upon reading from xml in system construction
@@ -268,7 +270,8 @@ class PandaLeapEnv(PandaBaseEnv):
             xml_path: Optional[epath.Path] = None,
             obj_name: Optional[str] = None,
             keyframe: Optional[str] = None,
-            use_ctrl_callback: bool = False
+            use_ctrl_callback: bool = False,
+            warp_enabled: bool = False
     ):
         self.arm_xml: str = xml_path.as_posix() if xml_path \
             else ROOT + "/models/panda/mjx_panda_nohand.xml"
@@ -284,7 +287,8 @@ class PandaLeapEnv(PandaBaseEnv):
         # -> [self._construct_system_model()] invoked here-in!
         super().__init__(config, config_overrides,
                          obj_name=obj_name, keyframe=keyframe,
-                         use_ctrl_callback=use_ctrl_callback)
+                         use_ctrl_callback=use_ctrl_callback,
+                         warp_enabled=warp_enabled)
 
     def _init_trace_sites(self):
         self.trace_sites += [
@@ -353,6 +357,13 @@ class PandaLeapEnv(PandaBaseEnv):
         # NOTE: This may disrupt already-setup collision from XML
         # mj_set_body_tree_collision_enabled(self.arm_spec.bodies[1], False)
 
+        # Name arm's body geoms
+        # Enabled [gravcomp]
+        for arm_body in self.arm_spec.bodies:
+            for geom in arm_body.geoms:
+                if geom.type == mj.mjtGeom.mjGEOM_MESH and not geom.name:
+                    geom.name = geom.meshname
+
         self.hand_spec = mj.MjSpec.from_file(self.hand_xml)
         PandaLeap.HAND_MODEL_NAME = self.hand_spec.modelname
         PandaLeap.HAND_BODIES_NAMES = [body.name for body in self.hand_spec.bodies]
@@ -414,7 +425,7 @@ class PandaLeapEnv(PandaBaseEnv):
             )
 
         # Add contact excludes
-        # PandaLeap.disable_arm_hand_collision(self.arm_spec)
+        PandaLeap.disable_arm_hand_collision(self.arm_spec)
 
         # Compile [arm_spec] -> model
         self._mj_model = self.arm_spec.compile()
@@ -442,6 +453,7 @@ class PandaLeapEnv(PandaBaseEnv):
         self._hand_geoms = [self.mj_model.geom(n).id for n in PandaLeap.HAND_GEOMS]
         self._finger_geoms = [self.mj_model.geom(n).id for n in PandaLeap.FINGER_GEOMS]
         self._hand_full_geoms = self._hand_geoms + self._finger_geoms
+        self._arm_geoms = [self.mj_model.geom(n).id for n in PandaLeap.ARM_GEOMS]
 
     def _free_joint_name(self, body_name: str):
         return f"{body_name}_freejoint"

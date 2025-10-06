@@ -15,7 +15,7 @@ Double click on the floating target cube, then change the goal orientation with
 """
 
 # Define the task (cost and dynamics)
-task = CubeRelocateEnv()
+task = CubeRelocateEnv(warp_enabled=True)
 
 # Parse command-line arguments
 parser = argparse.ArgumentParser(

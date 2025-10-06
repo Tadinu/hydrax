@@ -19,7 +19,7 @@ if __name__ == "__main__":
 
     # Define the task (cost and dynamics)
     use_ctrl_callback = False
-    task = PandaPickEnv(use_ctrl_callback=use_ctrl_callback)
+    task = PandaPickEnv(use_ctrl_callback=use_ctrl_callback, warp_enabled=False)
 
     # Parse command-line arguments
     parser = argparse.ArgumentParser(
