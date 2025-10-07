@@ -185,6 +185,9 @@ class Task(ABC):
     def __print_sensors_dim(self, sensor_ids: dict[str, int]) -> None:
         print({name: self.mj_model.sensor_dim[i] for name, i in sensor_ids.items()})
 
+    def get_sensor_id(self, sensor_name: str) -> int:
+        return self._mj_model.sensor(sensor_name).id
+
     def get_sensor_data(self, mjx_data: mjx.Data, sensor_id: int, start: int = 0, end: int = 0) -> jax.Array:
         """Get sensor data given sensor id."""
         # NOTE: Don't use [self.mjx_model], which may give incorrect adr if [warp_enabled] (This may be solved on future release)
