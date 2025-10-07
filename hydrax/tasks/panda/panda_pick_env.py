@@ -74,44 +74,25 @@ class PandaPickEnv(PandaLeapEnv):
                          keyframe=keyframe,
                          use_ctrl_callback=use_ctrl_callback,
                          warp_enabled=warp_enabled)
-        self.FINGER_TIPS_NAMES = ["leap_rh/if_tip", "leap_rh/mf_tip", "leap_rh/rf_tip", "leap_rh/th_tip"]
         self._sample_orientation = sample_orientation
         self.ctrl_callback = self.mjx_convert_free_hand_to_full_arm_hand_ctrl
         self._init_ik()
 
         # Get sensor ids
-        self.cube_position_sensor = mj.mj_name2id(
-            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_position"
-        )
-        self.cube_contact_with_palm_sensor = mj.mj_name2id(
-            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_contact_with_palm"
-        )
-        self.cube_distance_to_grasp_sensor = mj.mj_name2id(
-            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_distance_to_grasp"
-        )
-        self.obj_contact_with_finger_tip_sensors = {finger_tip:
-            mj.mj_name2id(
-                self.mj_model, mj.mjtObj.mjOBJ_SENSOR, f"cube_contact_with_{finger_tip}",
-            ) for finger_tip in self.FINGER_TIPS_NAMES
+        self.cube_position_sensor = self.get_sensor_id("cube_position")
+        self.cube_contact_with_palm_sensor = self.get_sensor_id("cube_contact_with_palm")
+        self.cube_distance_to_grasp_sensor = self.get_sensor_id("cube_distance_to_grasp")
+        self.obj_contact_with_finger_tip_sensors = {
+            finger_tip: self.get_sensor_id(f"cube_contact_with_{finger_tip}")
+            for finger_tip in self.FINGER_TIPS_NAMES
         }
-        self.cube_distance_to_target_sensor = mj.mj_name2id(
-            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_distance_to_target"
-        )
-        self.cube_orientation_sensor = mj.mj_name2id(
-            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_orientation"
-        )
-        self.cube_orientation_from_target_sensor = mj.mj_name2id(
-            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_orientation_from_target"
-        )
-        self.cube_linear_velocity_sensor = mj.mj_name2id(
-            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_linear_vel"
-        )
-        self.cube_angular_velocity_sensor = mj.mj_name2id(
-            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_angular_vel"
-        )
-        self.finger_tip_distance_to_cube_sensors = [mj.mj_name2id(
-            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, f"{finger_tip}_position") for finger_tip in self.FINGER_TIPS_NAMES
-        ]
+        self.cube_distance_to_target_sensor = self.get_sensor_id("cube_distance_to_target")
+        self.cube_orientation_sensor = self.get_sensor_id("cube_orientation")
+        self.cube_orientation_from_target_sensor = self.get_sensor_id("cube_orientation_from_target")
+        self.cube_linear_velocity_sensor = self.get_sensor_id("cube_linear_vel")
+        self.cube_angular_velocity_sensor = self.get_sensor_id("cube_angular_vel")
+        self.finger_tip_distance_to_cube_sensors = [self.get_sensor_id(f"{finger_tip}_position")
+                                                    for finger_tip in self.FINGER_TIPS_NAMES]
 
         # Distance (m) beyond which we impose a high cube position cost
         self.grasp_threshold = 0.05  # 0.015
@@ -289,12 +270,13 @@ class PandaPickEnv(PandaLeapEnv):
     def _get_cube_contact_with_palm(self, data: mjx.Data) -> jax.Array:
         """Num of cube contacts with palm"""
         # [found: 0 or num_contacts]
-        return self.get_sensor_data(data, self.cube_contact_with_palm_sensor, end=1) > 0
+        return self.get_sensor_data(data, self.cube_contact_with_palm_sensor, end=1)
 
     def _get_obj_contact_with_finger_tips(self, data: mjx.Data) -> jax.Array:
         # Each return [found: 0 or num_contacts]
         return jnp.sum(jnp.array(
-            [self.get_sensor_data(data, self.obj_contact_with_finger_tip_sensors[f]) for f in self.FINGER_TIPS_NAMES]))
+            [self.get_sensor_data(data, self.obj_contact_with_finger_tip_sensors[f], end=1) for f in
+             self.FINGER_TIPS_NAMES]))
 
     def _get_obj_contact_force_with_finger_tips(self, data: mjx.Data) -> jax.Array:
         return jnp.sum(jnp.square(jnp.array([self.get_sensor_data(data, self.obj_contact_with_finger_tip_sensors[f],
@@ -331,30 +313,34 @@ class PandaPickEnv(PandaLeapEnv):
 
     # Arm cost
     def _get_arm_cost(self, data: mjx.Data) -> jax.Array:
-        return jnp.zeros(1)  # 200 * self._get_arm_hand_contact_with_floor(data)
+        return 10000 * self._get_arm_hand_contact_with_floor(data)
 
-    def get_collision_info(self, state: mjx.Data, geom1: int, geom2: int) -> Tuple[jax.Array, jax.Array]:
+    def get_collision_info(self, data: mjx.Data, geom1: int, geom2: int) -> Tuple[jax.Array, jax.Array]:
         """Get the distance and normal of the collision between two geoms."""
-        state = state._impl
-        mask = (jnp.array([geom1, geom2]) == state.contact__geom).all(axis=1)
-        mask |= (jnp.array([geom2, geom1]) == state.contact__geom).all(axis=1)
-        idx = jnp.where(mask, state.contact__dist, 1e4).argmin()
-        dist = state.contact__dist[idx] * mask[idx]
-        normal = (dist < 0) * state.contact__frame[idx, 0, :3]
-        return dist, normal
+        if self.warp_enabled:
+            data = data._impl
+            mask = (jnp.array([geom1, geom2]) == data.contact__geom).all(axis=1)
+            mask |= (jnp.array([geom2, geom1]) == data.contact__geom).all(axis=1)
+            idx = jnp.where(mask, data.contact__dist, 1e4).argmin()
+            dist = data.contact__dist[idx] * mask[idx]
+            normal = (dist < 0) * data.contact__frame[idx, 0, :3]
+            return dist, normal
+        else:
+            from mujoco_playground._src.collision import get_collision_info
+            return get_collision_info(data._impl.contact, geom1, geom2)
 
-    def geoms_colliding(self, state: mjx.Data, geom1: int, geom2: int) -> jax.Array:
+    def geoms_colliding(self, data: mjx.Data, geom1: int, geom2: int) -> jax.Array:
         """Return True if the two geoms are colliding."""
-        return self.get_collision_info(state, geom1, geom2)[0] < 0  # pylint: disable=protected-access
+        return self.get_collision_info(data, geom1, geom2)[0] < 0  # pylint: disable=protected-access
 
     def _get_contact_with_floor(self, data: mjx.Data, geoms: list[int]) -> jax.Array:
         # Check for collisions between arm with the floor
-        floor_collision = [
-            jnp.abs(self.get_collision_info(data, self._floor_geom, g)[0]) *
-            self.geoms_colliding(data, self._floor_geom, g)
-            for g in geoms
-        ]
-        return jnp.ones(1) * sum(floor_collision)
+        floor_collision = jnp.zeros(1)
+        for g in geoms:
+            # Only penalize if [c<0] as in case of penetration
+            c = self.get_collision_info(data, self._floor_geom, g)[0]
+            floor_collision += jnp.abs(c) * (c < 0)
+        return floor_collision
 
     def _get_arm_hand_contact_with_floor(self, data: mjx.Data) -> jax.Array:
         """Arm + Hand contact with floor."""
@@ -370,7 +356,7 @@ class PandaPickEnv(PandaLeapEnv):
     # Fingertips total cost
     def _get_fingertips_cost(self, data: mjx.Data) -> jax.Array:
         # cost = 50 * self._get_finger_tips_distance_to_obj(data)
-        cost = -0.5 * self._get_obj_contact_with_finger_tips(data)
+        cost = -0.05 * self._get_obj_contact_with_finger_tips(data)
         return cost
 
     # Ref traj cost
@@ -400,10 +386,17 @@ class PandaPickEnv(PandaLeapEnv):
             squared_distance - self.grasp_threshold ** 2, 0.0
         )
         position_cost = 0.1 * squared_distance + reaching_cost
-        orientation_cost = 50 * self._get_cube_orientation_distance_to_target(data)
+        orientation_cost = 40 * self._get_cube_orientation_distance_to_target(data)
 
         grasp_cost = 0.001 * jnp.sum(jnp.square(control)) + self._get_fingertips_cost(data)
-        obj_vel_cost = 10 * jnp.sum(jnp.square(self._get_cube_linear_velocity(data)))
+        obj_vel_cost = 50 * jnp.sum(jnp.square(self._get_cube_linear_velocity(data)))
+
+        # jax.debug.print("{arm_cost} {position_cost} {grasp_cost} {obj_vel_cost} {orientation_cost} ",
+        #                arm_cost=arm_cost,
+        #                position_cost=position_cost,
+        #                grasp_cost=grasp_cost,
+        #                orientation_cost=orientation_cost,
+        #                obj_vel_cost=obj_vel_cost)
         return ref_qpos_cost + arm_cost + position_cost + orientation_cost + grasp_cost + obj_vel_cost
 
     def terminal_cost(self, data: mjx.Data) -> jax.Array:
@@ -412,7 +405,7 @@ class PandaPickEnv(PandaLeapEnv):
         arm_cost = self._get_arm_cost(data)
         position_err = self._get_cube_distance_to_grasp(data)
         grasp_cost = self._get_fingertips_cost(data)
-        obj_vel_cost = 10 * jnp.sum(jnp.square(self._get_cube_linear_velocity(data)))
+        obj_vel_cost = 50 * jnp.sum(jnp.square(self._get_cube_linear_velocity(data)))
         return ref_qpos_cost + 100 * jnp.sum(jnp.square(position_err)) + grasp_cost + obj_vel_cost
 
     def _get_obs(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:

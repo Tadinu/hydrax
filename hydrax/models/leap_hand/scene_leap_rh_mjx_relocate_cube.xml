@@ -67,13 +67,13 @@
   <sensor>
     <!-- cube. -->
     <framepos name="cube_position" objtype="body" objname="cube"/>
-    <contact name="cube_contact_with_palm" geom1="cube" geom2="palm_visual" data="found force" reduce="mindist"/>
-    <contact name="cube_contact_with_th_tip" geom1="cube" geom2="th_tip" data="found force" reduce="mindist"/>
-    <contact name="cube_contact_with_if_tip" geom1="cube" geom2="if_tip" data="found force" reduce="mindist"/>
-    <contact name="cube_contact_with_mf_tip" geom1="cube" geom2="mf_tip" data="found force" reduce="mindist"/>
-    <contact name="cube_contact_with_rf_tip" geom1="cube" geom2="rf_tip" data="found force" reduce="mindist"/>
+    <contact name="cube_contact_with_palm" geom1="cube" geom2="palm_visual" data="found force"/>
+    <contact name="cube_contact_with_th_tip" geom1="cube" geom2="th_tip" data="found force"/>
+    <contact name="cube_contact_with_if_tip" geom1="cube" geom2="if_tip" data="found force"/>
+    <contact name="cube_contact_with_mf_tip" geom1="cube" geom2="mf_tip" data="found force"/>
+    <contact name="cube_contact_with_rf_tip" geom1="cube" geom2="rf_tip" data="found force"/>
     <framepos name="cube_distance_to_grasp" objtype="body" objname="cube" reftype="site" refname="grasp_site" />
-    <framepos name="cube_distance_from_target" objtype="body" objname="cube" reftype="body" refname="target"/>
+    <framepos name="cube_distance_to_target" objtype="body" objname="cube" reftype="body" refname="target"/>
     <framequat name="cube_orientation" objtype="body" objname="cube"/>
     <framequat name="cube_orientation_from_target" objtype="body" objname="cube" reftype="body" refname="target"/>
     <framepos name="grasp_distance_from_target" objtype="site" objname="grasp_site" reftype="body" refname="target"/>

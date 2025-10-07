@@ -58,39 +58,20 @@ class CubeRelocateEnv(Task):
         base_body.quat = HAND_BASE_POSE[1]
 
         # Get sensor ids
-        self.cube_position_sensor = mj.mj_name2id(
-            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_position"
-        )
-        self.cube_orientation_sensor = mj.mj_name2id(
-            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_orientation"
-        )
-        self.cube_contact_with_palm_sensor = mj.mj_name2id(
-            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_contact_with_palm"
-        )
-        self.cube_distance_to_grasp_sensor = mj.mj_name2id(
-            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_distance_to_grasp"
-        )
-        self.obj_contact_with_finger_tip_sensors = {finger_tip:
-            mj.mj_name2id(
-                self.mj_model, mj.mjtObj.mjOBJ_SENSOR, f"cube_contact_with_{finger_tip}",
-            ) for finger_tip in self.FINGER_TIPS_NAMES
+        self.cube_position_sensor = self.get_sensor_id("cube_position")
+        self.cube_orientation_sensor = self.get_sensor_id("cube_orientation")
+        self.cube_contact_with_palm_sensor = self.get_sensor_id("cube_contact_with_palm")
+        self.cube_distance_to_grasp_sensor = self.get_sensor_id("cube_distance_to_grasp")
+        self.obj_contact_with_finger_tip_sensors = {
+            finger_tip: self.get_sensor_id(f"cube_contact_with_{finger_tip}")
+            for finger_tip in self.FINGER_TIPS_NAMES
         }
-        self.cube_distance_to_target_sensor = mj.mj_name2id(
-            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_distance_to_target"
-        )
-        self.cube_orientation_from_target_sensor = mj.mj_name2id(
-            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_orientation_from_target"
-        )
-        self.cube_linear_velocity_sensor = mj.mj_name2id(
-            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_linear_vel"
-        )
-        self.cube_angular_velocity_sensor = mj.mj_name2id(
-            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, "cube_angular_vel"
-        )
-        self.finger_tip_distance_to_cube_sensors = [mj.mj_name2id(
-            self.mj_model, mj.mjtObj.mjOBJ_SENSOR, f"{finger_tip}_distance_to_cube") for finger_tip in
-            self.FINGER_TIPS_NAMES
-        ]
+        self.cube_distance_to_target_sensor = self.get_sensor_id("cube_distance_to_target")
+        self.cube_orientation_from_target_sensor = self.get_sensor_id("cube_orientation_from_target")
+        self.cube_linear_velocity_sensor = self.get_sensor_id("cube_linear_vel")
+        self.cube_angular_velocity_sensor = self.get_sensor_id("cube_angular_vel")
+        self.finger_tip_distance_to_cube_sensors = [self.get_sensor_id(f"{finger_tip}_distance_to_cube")
+                                                    for finger_tip in self.FINGER_TIPS_NAMES]
 
         # Distance (m) beyond which we impose a high cube position cost
         self.grasp_threshold = 0.05  # 0.015
@@ -120,7 +101,8 @@ class CubeRelocateEnv(Task):
     def _get_obj_contact_with_finger_tips(self, data: mjx.Data) -> jax.Array:
         # Each return [found: 0 or num_contacts]
         return jnp.sum(jnp.array(
-            [self.get_sensor_data(data, self.obj_contact_with_finger_tip_sensors[f]) for f in self.FINGER_TIPS_NAMES]))
+            [self.get_sensor_data(data, self.obj_contact_with_finger_tip_sensors[f], end=1) for f in
+             self.FINGER_TIPS_NAMES]))
 
     def _get_obj_contact_force_with_finger_tips(self, data: mjx.Data) -> jax.Array:
         return jnp.sum(jnp.square(jnp.array([self.get_sensor_data(data, self.obj_contact_with_finger_tip_sensors[f],

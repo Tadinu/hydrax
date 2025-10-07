@@ -1,5 +1,5 @@
 <mujoco model="panda single cube">
-  <include file="mjx_scene.xml"/>
+  <include file="mjx_panda_scene.xml"/>
   <include file="../cube/reorientation_cube.xml"/>
 
   <worldbody>
@@ -11,11 +11,6 @@
   <!-- Sensors for the cube -->
   <sensor>
     <framepos name="cube_position" objtype="body" objname="cube"/>
-    <contact name="cube_contact_with_palm" geom1="cube" geom2="leap_rh/palm_visual" data="found force" reduce="mindist"/>
-    <contact name="cube_contact_with_th_tip" geom1="cube" geom2="leap_rh/th_tip" data="found force" reduce="mindist"/>
-    <contact name="cube_contact_with_if_tip" geom1="cube" geom2="leap_rh/if_tip" data="found force" reduce="mindist"/>
-    <contact name="cube_contact_with_mf_tip" geom1="cube" geom2="leap_rh/mf_tip" data="found force" reduce="mindist"/>
-    <contact name="cube_contact_with_rf_tip" geom1="cube" geom2="leap_rh/rf_tip" data="found force" reduce="mindist"/>
     <framepos name="cube_distance_to_grasp" objtype="body" objname="cube" reftype="site" refname="leap_rh/grasp_site" />
     <framepos name="cube_distance_to_target" objtype="body" objname="cube" reftype="body" refname="target"/>
     <framequat name="cube_orientation" objtype="body" objname="cube"/>

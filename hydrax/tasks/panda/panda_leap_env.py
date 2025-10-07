@@ -282,6 +282,7 @@ class PandaLeapEnv(PandaBaseEnv):
 
         self.ARM_JOINTS = PandaLeap.ARM_JOINTS
         self.HAND_JOINTS = PandaLeap.HAND_JOINTS
+        self.FINGER_TIPS_NAMES = ["leap_rh/if_tip", "leap_rh/mf_tip", "leap_rh/rf_tip", "leap_rh/th_tip"]
 
         # NOTE: Don't pass [xml_path] to [PandaBaseEnv] here, since the arm+hand model will be programmingly composed
         # -> [self._construct_system_model()] invoked here-in!
@@ -352,7 +353,8 @@ class PandaLeapEnv(PandaBaseEnv):
         self.arm_spec.option.disableflags |= mj.mjtDisableBit.mjDSBL_CLAMPCTRL
         # system_worldbody = self.arm_spec.worldbody
         print("SYSTEM MODEL NAME: ", self.arm_spec.modelname)
-        PandaLeap.ARM_BODIES_NAMES = [body.name for body in self.arm_spec.bodies]
+        print("OBJECT NAME: ", self._obj_name)
+        PandaLeap.ARM_BODIES_NAMES = [body.name for body in self.arm_spec.bodies if body.name != self._obj_name]
         # Disable arm's bodies collision
         # NOTE: This may disrupt already-setup collision from XML
         # mj_set_body_tree_collision_enabled(self.arm_spec.bodies[1], False)
@@ -427,9 +429,51 @@ class PandaLeapEnv(PandaBaseEnv):
         # Add contact excludes
         PandaLeap.disable_arm_hand_collision(self.arm_spec)
 
+        # Add sensors
+        self._add_sensors(self.arm_spec)
+
         # Compile [arm_spec] -> model
         self._mj_model = self.arm_spec.compile()
+
         return self._mj_model
+
+    def _add_sensors(self, spec: mj.MjSpec):
+        # Arm
+        for geom in PandaLeap.ARM_GEOMS:
+            spec.add_sensor(name=f"{geom}_contact_with_floor",
+                            needstage=mj.mjtStage.mjSTAGE_POS,
+                            type=mj.mjtSensor.mjSENS_CONTACT,
+                            datatype=mj.mjtDataType.mjDATATYPE_REAL,
+                            objtype=mj.mjtObj.mjOBJ_GEOM, objname=geom,
+                            reftype=mj.mjtObj.mjOBJ_GEOM, refname="floor",
+                            # NOTE: Refer to mjNCONDATA for contact bits
+                            intprm=[1, 1, 1])  # "found"
+
+        # Objects
+        obj_name = self._obj_name
+        spec.add_sensor(name=f"{obj_name}_contact_with_palm",
+                        needstage=mj.mjtStage.mjSTAGE_POS,
+                        type=mj.mjtSensor.mjSENS_CONTACT,
+                        datatype=mj.mjtDataType.mjDATATYPE_REAL,
+                        objtype=mj.mjtObj.mjOBJ_GEOM, objname=obj_name,
+                        reftype=mj.mjtObj.mjOBJ_GEOM, refname="leap_rh/palm_visual",
+                        # NOTE: Refer to mjNCONDATA for contact bits
+                        intprm=[1 | (1 << 4), 1, 1])  # "found pos"
+
+        for finger_tip in self.FINGER_TIPS_NAMES:
+            spec.add_sensor(name=f"{finger_tip}_position",
+                            needstage=mj.mjtStage.mjSTAGE_POS,
+                            type=mj.mjtSensor.mjSENS_FRAMEPOS,
+                            datatype=mj.mjtDataType.mjDATATYPE_REAL,
+                            objtype=mj.mjtObj.mjOBJ_SITE, objname=finger_tip)
+            spec.add_sensor(name=f"{obj_name}_contact_with_{finger_tip}",
+                            needstage=mj.mjtStage.mjSTAGE_POS,
+                            type=mj.mjtSensor.mjSENS_CONTACT,
+                            datatype=mj.mjtDataType.mjDATATYPE_REAL,
+                            objtype=mj.mjtObj.mjOBJ_GEOM, objname=obj_name,
+                            reftype=mj.mjtObj.mjOBJ_GEOM, refname=finger_tip,
+                            # NOTE: Refer to mjNCONDATA for contact bits
+                            intprm=[1 | (1 << 4), 1, 1])  # "found pos"
 
     def _post_init(self) -> None:
         super()._post_init()
