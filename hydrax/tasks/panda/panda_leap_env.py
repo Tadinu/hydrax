@@ -281,8 +281,36 @@ class PandaLeapEnv(PandaBaseEnv):
         self.hand_base_spec: mj.MjsBody = None
 
         self.ARM_JOINTS = PandaLeap.ARM_JOINTS
-        self.HAND_JOINTS = PandaLeap.HAND_JOINTS
-        self.FINGER_TIPS_NAMES = ["leap_rh/if_tip", "leap_rh/mf_tip", "leap_rh/rf_tip", "leap_rh/th_tip"]
+        self.HAND_JOINTS = [f"leap_rh/{joint}" for joint in PandaLeap.HAND_JOINTS]
+
+        self.FINGER_TIPS_NAMES = ["leap_rh/if_tip", "leap_rh/mf_tip", "leap_rh/th_tip"]  # "leap_rh/rf_tip",
+
+        self.FINGER_IF_PALMS_NAMES = [  # "leap_rh/if_bs",
+            # "leap_rh/if_px",
+            "leap_rh/if_md",
+            "leap_rh/if_ds"]
+
+        self.FINGER_MF_PALMS_NAMES = [  # "leap_rh/mf_bs",
+            # "leap_rh/mf_px",
+            "leap_rh/mf_md",
+            "leap_rh/mf_ds"]
+
+        self.FINGER_RF_PALMS_NAMES = [  # "leap_rh/rf_bs",
+            # "leap_rh/rf_px",
+            "leap_rh/rf_md",
+            "leap_rh/rf_ds"]
+
+        self.FINGER_TH_PALMS_NAMES = [  # "leap_rh/th_mp",
+            # "leap_rh/th_px",
+            "leap_rh/th_ds"]
+
+        self.FINGER_PALMS_NAMES = (self.FINGER_IF_PALMS_NAMES + self.FINGER_MF_PALMS_NAMES +
+                                   self.FINGER_RF_PALMS_NAMES + self.FINGER_TH_PALMS_NAMES)
+
+        self.HAND_HOME_QPOS = [-0.0694123, 0.0551428, 0.986832, 0.671424,
+                               -0.186261, -0.0866821, 1.01374, 0.728192,
+                               -0.218949, -0.0318307, 1.25156, 0.840648,
+                               1.0593, 0.638801, 0.391599, 0.57284]
 
         # NOTE: Don't pass [xml_path] to [PandaBaseEnv] here, since the arm+hand model will be programmingly composed
         # -> [self._construct_system_model()] invoked here-in!
@@ -449,23 +477,51 @@ class PandaLeapEnv(PandaBaseEnv):
                             # NOTE: Refer to mjNCONDATA for contact bits
                             intprm=[1, 1, 1])  # "found"
 
+        # Hand
+        for geom in PandaLeap.HAND_GEOMS:
+            spec.add_sensor(name=f"{geom}_contact_with_floor",
+                            needstage=mj.mjtStage.mjSTAGE_POS,
+                            type=mj.mjtSensor.mjSENS_CONTACT,
+                            datatype=mj.mjtDataType.mjDATATYPE_REAL,
+                            objtype=mj.mjtObj.mjOBJ_GEOM, objname=geom,
+                            reftype=mj.mjtObj.mjOBJ_GEOM, refname="floor",
+                            # NOTE: Refer to mjNCONDATA for contact bits
+                            intprm=[1, 1, 1])  # "found"
+
         # Objects
         obj_name = self._obj_name
+
+        # Palm tactile part
+        palm_name = f"{PandaLeap.HAND_MODEL_NAME}/palm"
+        palm_center_name = f"{PandaLeap.HAND_MODEL_NAME}/palm_center"
+        palm_body = spec.body(palm_name)
+        palm_body.add_geom(type=mj.mjtGeom.mjGEOM_BOX,
+                           name=palm_name,
+                           size=[0.03, 0.03, 0.01],
+                           rgba=[0, 1, 0, 1],
+                           pos=[-0.03, -0.035, -0.025], group=1)
+        palm_body.add_site(type=mj.mjtGeom.mjGEOM_SPHERE,
+                           name=palm_center_name,
+                           size=[0.01, 0.01, 0.01],
+                           rgba=[0, 0, 1, 1],
+                           pos=[-0.03, -0.035, -0.04], group=1)
         spec.add_sensor(name=f"{obj_name}_contact_with_palm",
                         needstage=mj.mjtStage.mjSTAGE_POS,
                         type=mj.mjtSensor.mjSENS_CONTACT,
                         datatype=mj.mjtDataType.mjDATATYPE_REAL,
                         objtype=mj.mjtObj.mjOBJ_GEOM, objname=obj_name,
-                        reftype=mj.mjtObj.mjOBJ_GEOM, refname="leap_rh/palm_visual",
+                        reftype=mj.mjtObj.mjOBJ_GEOM, refname=palm_name,
                         # NOTE: Refer to mjNCONDATA for contact bits
-                        intprm=[1 | (1 << 4), 1, 1])  # "found pos"
+                        intprm=[1 | (1 << 3), 2, 1])  # "found dist"
 
+        spec.add_sensor(name=f"grasp_direction",
+                        needstage=mj.mjtStage.mjSTAGE_POS,
+                        type=mj.mjtSensor.mjSENS_FRAMEPOS,  # [mjSENS_GEOMDIST] is not supported yet by [mjx]
+                        datatype=mj.mjtDataType.mjDATATYPE_REAL,
+                        objtype=mj.mjtObj.mjOBJ_SITE, objname=f"{PandaLeap.HAND_MODEL_NAME}/grasp_site",
+                        reftype=mj.mjtObj.mjOBJ_SITE, refname=palm_center_name)
+        # Finger tactile parts
         for finger_tip in self.FINGER_TIPS_NAMES:
-            spec.add_sensor(name=f"{finger_tip}_position",
-                            needstage=mj.mjtStage.mjSTAGE_POS,
-                            type=mj.mjtSensor.mjSENS_FRAMEPOS,
-                            datatype=mj.mjtDataType.mjDATATYPE_REAL,
-                            objtype=mj.mjtObj.mjOBJ_SITE, objname=finger_tip)
             spec.add_sensor(name=f"{obj_name}_contact_with_{finger_tip}",
                             needstage=mj.mjtStage.mjSTAGE_POS,
                             type=mj.mjtSensor.mjSENS_CONTACT,
@@ -473,7 +529,31 @@ class PandaLeapEnv(PandaBaseEnv):
                             objtype=mj.mjtObj.mjOBJ_GEOM, objname=obj_name,
                             reftype=mj.mjtObj.mjOBJ_GEOM, refname=finger_tip,
                             # NOTE: Refer to mjNCONDATA for contact bits
-                            intprm=[1 | (1 << 4), 1, 1])  # "found pos"
+                            intprm=[1 | (1 << 3), 2, 1])  # "found dist"
+
+        for finger_palm in self.FINGER_PALMS_NAMES:
+            finger_palm_body = spec.body(finger_palm)
+            finger_palm_body.add_geom(type=mj.mjtGeom.mjGEOM_SPHERE,
+                                      name=finger_palm,
+                                      size=[0.01, 0.01, 0.01],
+                                      rgba=[0, 1, 0, 1],
+                                      pos=[-0.03, -0.04, 0.] if finger_palm in self.FINGER_TH_PALMS_NAMES
+                                      else [-0.01, -0.03, 0.01], group=1)
+            spec.add_sensor(name=f"{obj_name}_distance_to_{finger_palm}",
+                            needstage=mj.mjtStage.mjSTAGE_POS,
+                            type=mj.mjtSensor.mjSENS_FRAMEPOS,  # [mjSENS_GEOMDIST] is not supported yet by [mjx]
+                            datatype=mj.mjtDataType.mjDATATYPE_REAL,
+                            objtype=mj.mjtObj.mjOBJ_BODY, objname=obj_name,
+                            reftype=mj.mjtObj.mjOBJ_GEOM, refname=finger_palm)
+
+            spec.add_sensor(name=f"{obj_name}_contact_with_{finger_palm}",
+                            needstage=mj.mjtStage.mjSTAGE_POS,
+                            type=mj.mjtSensor.mjSENS_CONTACT,
+                            datatype=mj.mjtDataType.mjDATATYPE_REAL,
+                            objtype=mj.mjtObj.mjOBJ_GEOM, objname=obj_name,
+                            reftype=mj.mjtObj.mjOBJ_GEOM, refname=finger_palm,
+                            # NOTE: Refer to mjNCONDATA for contact bits
+                            intprm=[1 | (1 << 3), 2, 1])  # "found dist"
 
     def _post_init(self) -> None:
         super()._post_init()
@@ -493,11 +573,14 @@ class PandaLeapEnv(PandaBaseEnv):
         self._max_torque = 8.0
 
     def _init_hand(self):
+        self._palm_center = self.mj_model.site(PandaLeap.hand_item_full_name("palm_center")).id
         self._grasp_site = self.mj_model.site(PandaLeap.hand_item_full_name("grasp_site")).id
         self._hand_geoms = [self.mj_model.geom(n).id for n in PandaLeap.HAND_GEOMS]
         self._finger_geoms = [self.mj_model.geom(n).id for n in PandaLeap.FINGER_GEOMS]
         self._hand_full_geoms = self._hand_geoms + self._finger_geoms
         self._arm_geoms = [self.mj_model.geom(n).id for n in PandaLeap.ARM_GEOMS]
+        self._palm_geoms = [self.mj_model.geom(f"{PandaLeap.HAND_MODEL_NAME}/palm").id]
+        self._finger_palm_geoms = [self.mj_model.geom(n).id for n in self.FINGER_PALMS_NAMES]
 
     def _free_joint_name(self, body_name: str):
         return f"{body_name}_freejoint"
