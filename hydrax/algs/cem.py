@@ -86,6 +86,18 @@ class CEM(SamplingBasedController):
         self.num_elites = num_elites
         self.num_explore = int(self.num_samples * explore_fraction)
 
+        # Pre-compute shapes for both main and exploration samples
+        self.main_shape = (
+            self.num_samples - self.num_explore,
+            self.num_knots,
+            self.num_ctrls,
+        )
+        self.explore_shape = (
+            self.num_explore,
+            self.num_knots,
+            self.num_ctrls,
+        )
+
     def init_params(
             self, initial_knots: jax.Array = None, seed: int = 0
     ) -> CEMParams:
@@ -100,31 +112,19 @@ class CEM(SamplingBasedController):
         """Sample a control sequence."""
         rng, sample_rng, explore_rng = jax.random.split(params.rng, 3)
 
-        # Pre-compute shapes for both main and exploration samples
-        main_shape = (
-            self.num_samples - self.num_explore,
-            self.num_knots,
-            self.num_ctrls,
-        )
-        explore_shape = (
-            self.num_explore,
-            self.num_knots,
-            self.num_ctrls,
-        )
-
         # Sample main knots with current covariance
         main_controls = (
-            params.mean + params.cov * jax.random.normal(sample_rng, main_shape)
-            if main_shape[0] > 0
-            else jnp.empty(main_shape)
+            params.mean + params.cov * jax.random.normal(sample_rng, self.main_shape)
+            if self.main_shape[0] > 0
+            else jnp.empty(self.main_shape)
         )
 
         # Sample exploration knots with initial covariance
         explore_controls = (
             params.mean
-            + self.sigma_start * jax.random.normal(explore_rng, explore_shape)
-            if explore_shape[0] > 0
-            else jnp.empty(explore_shape)
+            + self.sigma_start * jax.random.normal(explore_rng, self.explore_shape)
+            if self.explore_shape[0] > 0
+            else jnp.empty(self.explore_shape)
         )
 
         # Combine both sets of controls
