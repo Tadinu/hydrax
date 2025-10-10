@@ -1,6 +1,7 @@
 import argparse
 
 import evosax
+from evosax.algorithms.distribution_based import Sep_CMA_ES
 import mujoco as mj
 
 from hydrax.algs import CEM, ICEM, MPPI, Evosax, PredictiveSampling, DIAL
@@ -65,7 +66,7 @@ if __name__ == "__main__":
             task,
             num_samples=128,
             num_elites=5,
-            sigma_start=0.5,
+            sigma_start=2.0,
             sigma_min=0.5,
             num_randomizations=8,
             plan_horizon=0.25,
@@ -94,9 +95,9 @@ if __name__ == "__main__":
         print("Running CMA-ES")
         ctrl = Evosax(
             task,
-            evosax.Sep_CMA_ES,
+            Sep_CMA_ES,
             num_samples=128,
-            elite_ratio=0.5,
+            # elite_ratio=0.5,
             num_randomizations=8,
             plan_horizon=0.25,
             spline_type="zero",

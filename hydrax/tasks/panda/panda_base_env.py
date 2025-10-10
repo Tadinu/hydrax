@@ -69,16 +69,18 @@ class PandaBaseEnv(mjx_env.MjxEnv, Task):
         if keyframe is None:
             keyframe = "home"
         self.use_ctrl_callback = use_ctrl_callback
-        self.ARM_JOINTS = [
-            "joint1",
-            "joint2",
-            "joint3",
-            "joint4",
-            "joint5",
-            "joint6",
-            "joint7",
-        ]
-        self.HAND_JOINTS = []
+        if not hasattr(self, "ARM_JOINTS"):
+            self.ARM_JOINTS = [
+                "joint1",
+                "joint2",
+                "joint3",
+                "joint4",
+                "joint5",
+                "joint6",
+                "joint7",
+            ]
+        if not hasattr(self, "HAND_JOINTS"):
+            self.HAND_JOINTS = []
         self._action_scale = config.action_scale
         Task.__init__(self, xml_path=xml_path, sim_dt=config.sim_dt,
                       obj_name=obj_name, keyframe=keyframe, trace_sites=trace_sites,
@@ -191,7 +193,7 @@ class PandaBaseEnv(mjx_env.MjxEnv, Task):
 
     def domain_randomize_data(self, data: mjx.Data, rng: jax.Array) -> Dict[str, jax.Array]:
         """Randomly shift the measured configurations."""
-        if False:
+        if True:
             """Add noise to the state estimate."""
             rng, q_rng, v_rng = jax.random.split(rng, 3)
             q_err = 0.01 * jax.random.normal(q_rng, (self.mjx_model.nq,))
