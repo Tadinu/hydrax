@@ -13,10 +13,20 @@ from mujoco import mjx
 # mujoco playground
 from mujoco_playground._src import mjx_env
 
+# hydrax
 from hydrax import ROOT
 from hydrax.task_base import Task
 
+# mjmanip
+from mjmanip.robot.leap import Leap
+
 HAND_BASE_POSE = [np.array([-0.25, 0.0, 0.25]), np.array([0.0, 1.0, 0.0, 0.0])]
+HAND_HOME_QPOS = [
+    0.8, 0, 0.8, 0.8,
+    0.8, 0, 0.8, 0.8,
+    0.8, 0, 0.8, 0.8,
+    0.8, 0.8, 0.8, 0,
+]
 
 
 class RelocatePhase(IntEnum):
@@ -26,7 +36,7 @@ class RelocatePhase(IntEnum):
     RELOCATING = 3
 
 
-class CubeRelocateEnv(Task):
+class CubeRelocateTask(Task):
     """Cube rotation with the LEAP hand."""
 
     def get_assets(self) -> Dict[str, bytes]:
@@ -55,6 +65,10 @@ class CubeRelocateEnv(Task):
         base_body = self.mj_model.body("leap_mount")
         base_body.pos = HAND_BASE_POSE[0]
         base_body.quat = HAND_BASE_POSE[1]
+
+        # Obj
+        obj = self._mj_model.body(self._obj_name)
+        self._init_obj_qpos = np.concatenate([obj.pos, obj.quat])
 
         # Get sensor ids
         self.cube_position_sensor = self.get_sensor_id("cube_position")
@@ -87,6 +101,12 @@ class CubeRelocateEnv(Task):
 
     def _init_hand(self):
         pass
+
+    @property
+    def home_qpos(self):
+        return (
+            HAND_HOME_QPOS + self._init_obj_qpos.tolist() if self._obj_name else HAND_HOME_QPOS
+        )
 
     def _get_cube_position(self, data: mjx.Data) -> jax.Array:
         """Position of the cube in world frame."""
