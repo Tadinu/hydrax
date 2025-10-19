@@ -216,6 +216,7 @@ def run_simulator(
     mocap_id = ctrl.task.mj_model.body_mocapid[obj_id]
     DEFAULT_WXYZ = np.array([0., 1., 0., 0.])
     with mujoco.viewer.launch_passive(mj_model, mj_data) as viewer:
+        ctrl.task._mj_viewer = viewer
         while viewer.is_running():
             start_time = time.time()
 
