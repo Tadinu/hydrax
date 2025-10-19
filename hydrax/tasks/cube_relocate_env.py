@@ -41,16 +41,15 @@ class CubeRelocateEnv(Task):
         mjx_env.update_assets(assets, path / "reorientation_cube_textures")
         return assets
 
-    def __init__(self, warp_enabled: bool = False) -> None:
+    def __init__(self, name: str, warp_enabled: bool = False) -> None:
         """Load the MuJoCo model and set task parameters."""
 
         self.FINGER_TIPS_NAMES = ["if_tip", "mf_tip", "rf_tip", "th_tip"]
-        super().__init__(
-            xml_path=epath.Path(ROOT) / "models" / "leap_hand" / "scene_leap_rh_mjx_relocate_cube.xml",
-            obj_name="cube",
-            trace_sites=["grasp_site"] + self.FINGER_TIPS_NAMES,
-            warp_enabled=warp_enabled
-        )
+        super().__init__(name,
+                         xml_path=epath.Path(ROOT) / "models" / "leap_hand" / "scene_leap_rh_mjx_relocate_cube.xml",
+                         obj_name="cube",
+                         trace_sites=["grasp_site"] + self.FINGER_TIPS_NAMES,
+                         warp_enabled=warp_enabled)
 
         # Move [base_body]
         base_body = self.mj_model.body("leap_mount")

@@ -145,6 +145,7 @@ def run_interactive(  # noqa: PLR0912, PLR0915
 
     # Start the simulation
     with mujoco.viewer.launch_passive(mj_model, mj_data) as viewer:
+        controller.task._mj_viewer = viewer
         if fixed_camera_id is not None:
             # Set the custom camera
             viewer.cam.fixedcamid = fixed_camera_id
