@@ -15,11 +15,11 @@ class HumanoidStandup(Task):
     def __init__(self, impl: str = "jax") -> None:
         """Load the MuJoCo model and set task parameters."""
         mj_model = mj.MjModel.from_xml_path(ROOT + "/models/g1/scene.xml")
-        super().__init__(
-            mj_model,
-            trace_sites=["imu_in_torso", "left_foot", "right_foot"],
+        super().__init__(name="humanoid_standup",
+                         mj_model=mj_model,
+                         trace_sites=["imu_in_torso", "left_foot", "right_foot"],
             impl=impl,
-        )
+                         )
 
         # Get sensor and site ids
         self.orientation_sensor_id = mj_model.sensor("imu_in_torso_quat").id

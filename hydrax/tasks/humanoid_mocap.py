@@ -88,10 +88,10 @@ class HumanoidMocap(Task):
         mj_model = mj.MjModel.from_xml_path(
             ROOT + "/models/g1/scene_23dof.xml"
         )
-        super().__init__(
-            mj_model,
-            trace_sites=["imu_in_torso", "left_foot", "right_foot"],
-            impl=impl,
+        super().__init__(name="humanoid_mocap",
+                         mj_model=mj_model,
+                         trace_sites=["imu_in_torso", "left_foot", "right_foot"],
+                         impl=impl
         )
 
         # Download and load reference data
