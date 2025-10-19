@@ -1,15 +1,24 @@
 import os
-
+# import time
 from abc import ABC, abstractmethod
 from typing import Callable, Dict, Sequence, Optional, Union
 from etils import epath
+from copy import deepcopy
 
 import numpy as np
 import jax
 import jax.numpy as jnp
 
 import mujoco as mj
+import mujoco.viewer
 from mujoco import mjx
+
+# robotsuite
+from robosuite.utils.binding_utils import MjSimState
+
+# hydrax
+from hydrax import DATA_DIR
+from hydrax.data_collector import DataCollector
 
 jax.config.update("jax_check_tracer_leaks", True)
 
@@ -31,6 +40,7 @@ class Task(ABC):
 
     def __init__(
             self,
+            name: str,
             mj_model: Optional[mj.MjModel] = None,
             xml_path: Optional[epath.Path] = None,
             u_min: Optional[np.ndarray] = None,
@@ -56,11 +66,13 @@ class Task(ABC):
         Note: many other simulator parameters, e.g., simulator time step,
               Newton iterations, etc., are set in the model itself.
         """
+        self.name: str = name
         self._mj_model: mj.MjModel = None
         self._mj_data: mj.MjData = None
         self.warp_enabled = (impl == 'warp')
         self._mjx_model: mjx.Model = None
         self._xml_path: str = ""
+        self._mj_viewer: mj.viewer = None
         if not hasattr(self, "sim_dt"):
             self.sim_dt = sim_dt
         if not hasattr(self, "ctrl_dt"):
@@ -89,6 +101,11 @@ class Task(ABC):
 
         # Post init
         self._post_init()
+
+        # Data collector
+        # tmp_directory = "/tmp/{}".format(str(time.time()).replace(".", "_"))
+        self._data_collector = DataCollector(self, DATA_DIR)
+        self._ep_meta = {}
 
     def _construct_system_model(self) -> Optional[mj.MjModel]:
         return None
@@ -183,41 +200,6 @@ class Task(ABC):
         """
         pass
 
-    def __print_sensors_dim(self, sensor_ids: dict[str, int]) -> None:
-        print({name: self.mj_model.sensor_dim[i] for name, i in sensor_ids.items()})
-
-    def get_sensor_id(self, sensor_name: str) -> int:
-        return self._mj_model.sensor(sensor_name).id
-
-    def get_sensor_data(self, mjx_data: mjx.Data, sensor_id: int, start: int = 0, end: int = 0) -> jax.Array:
-        """Get sensor data given sensor id."""
-        # NOTE: Don't use [self.mjx_model], which may give incorrect adr if [warp_enabled] (This may be solved on future release)
-        sensor_adr = self.mj_model.sensor_adr[sensor_id]
-        sensor_dim = self.mj_model.sensor_dim[sensor_id]
-        return mjx_data.sensordata[sensor_adr + start: sensor_adr + (end if end else sensor_dim)]
-
-    def get_sensor_data_by_name(self, mjx_data: mjx.Data, sensor_name: str, start: int = 0, end: int = 0) -> jax.Array:
-        """Get sensor data given sensor name."""
-        sensor_id = self.mj_model.sensor(sensor_name).id
-        return self.get_sensor_data(mjx_data, sensor_id, start, end)
-
-    def get_trace_sites(self, state: mjx.Data) -> jax.Array:
-        """Get the positions of the trace sites at the current time step.
-
-        Args:
-            state: The current state xₜ.
-
-        Returns:
-            The positions of the trace sites at the current time step.
-        """
-        if len(self.trace_site_ids) == 0:
-            return jnp.zeros((0, 3))
-
-        return state.site_xpos[self.trace_site_ids]
-
-    def get_base_pose(self, state: mjx.Data) -> jnp.ndarray:
-        return jnp.zeros(7)
-
     def domain_randomize_model(self, rng: jax.Array) -> Dict[str, jax.Array]:
         """Generate randomized model parameters for domain randomization.
 
@@ -255,6 +237,100 @@ class Task(ABC):
             A dictionary of randomized data elements.
         """
         return {}
+
+    def check_success(self) -> bool:
+        """
+        Checks if the task has been completed. Should be implemented by subclasses
+        Returns:
+            bool: True if the task has been completed
+        """
+        pass
+
+    def print_sensors_dim(self, sensor_ids: dict[str, int]) -> None:
+        print({name: self._mj_model.sensor_dim[i] for name, i in sensor_ids.items()})
+
+    def get_sensor_id(self, sensor_name: str) -> int:
+        return self._mj_model.sensor(sensor_name).id
+
+    def get_sensor_data(self, mjx_data: mjx.Data, sensor_id: int, start: int = 0, end: int = 0) -> jax.Array:
+        """Get sensor data given sensor id."""
+        # NOTE: Don't use [self.mjx_model], which may give incorrect adr if [warp_enabled] (This may be solved on future release)
+        sensor_adr = self.mj_model.sensor_adr[sensor_id]
+        sensor_dim = self.mj_model.sensor_dim[sensor_id]
+        return mjx_data.sensordata[sensor_adr + start: sensor_adr + (end if end else sensor_dim)]
+
+    def get_sensor_data_by_name(self, mjx_data: mjx.Data, sensor_name: str, start: int = 0, end: int = 0) -> jax.Array:
+        """Get sensor data given sensor name."""
+        sensor_id = self.mj_model.sensor(sensor_name).id
+        return self.get_sensor_data(mjx_data, sensor_id, start, end)
+
+    def get_trace_sites(self, state: mjx.Data) -> jax.Array:
+        """Get the positions of the trace sites at the current time step.
+
+        Args:
+            state: The current state xₜ.
+
+        Returns:
+            The positions of the trace sites at the current time step.
+        """
+        if len(self.trace_site_ids) == 0:
+            return jnp.zeros((0, 3))
+
+        return state.site_xpos[self.trace_site_ids]
+
+    def get_base_pose(self, state: mjx.Data) -> jnp.ndarray:
+        return jnp.zeros(7)
+
+    def get_state(self):
+        """Return MjSimState instance for current state."""
+        return MjSimState(
+            time=self._mj_data.time,
+            qpos=np.copy(self._mj_data.qpos),
+            qvel=np.copy(self._mj_data.qvel),
+        )
+
+    def set_state(self, value):
+        """
+        Set internal state from MjSimState instance. Should
+        call @forward afterwards to synchronize derived quantities.
+        """
+        self._mj_data.time = value.time
+        self._mj_data.qpos[:] = np.copy(value.qpos)
+        self._mj_data.qvel[:] = np.copy(value.qvel)
+
+    def set_state_from_flattened(self, value):
+        """
+        Set internal mujoco state using flat mjstate array. Should
+        call @forward afterwards to synchronize derived quantities.
+
+        See https://github.com/openai/mujoco-py/blob/4830435a169c1f3e3b5f9b58a7c3d9c39bdf4acb/mujoco_py/mjsimstate.pyx#L54
+        """
+        state = MjSimState.from_flattened(value, self)
+
+        # do this instead of @set_state to avoid extra copy of qpos and qvel
+        self._mj_data.time = state.time
+        self._mj_data.qpos[:] = state.qpos
+        self._mj_data.qvel[:] = state.qvel
+
+    def get_ep_meta(self):
+        """
+        Returns a dictionary containing episode metadata
+        Returns:
+            dict: episode metadata
+        """
+        return deepcopy(self._ep_meta)
+
+    def set_ep_meta(self, meta):
+        """
+        Set episode meta data
+        Args:
+            meta (dict): containing episode metadata
+        """
+        self._ep_meta = meta
+
+    def unset_ep_meta(self):
+        """
+        Unset episode meta data
 
     def make_data(self, **kwargs) -> mjx.Data:
         """Create a new state consistent with this task.

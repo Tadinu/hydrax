@@ -58,6 +58,7 @@ class PandaPickEnv(PandaLeapEnv):
         return config
 
     def __init__(self,
+                 name: str,
                  config: config_dict.ConfigDict = default_config(),
                  config_overrides: Optional[Dict[str, Union[str, int, list[Any]]]] = None,
                  xml_path: Optional[epath.Path] = None,
@@ -68,7 +69,7 @@ class PandaPickEnv(PandaLeapEnv):
                  warp_enabled: bool = False):
         if xml_path is None:
             xml_path = epath.Path(ROOT) / "models" / "panda" / "mjx_panda_leap_single_cube.xml"
-        super().__init__(config, config_overrides,
+        super().__init__(name, config, config_overrides,
                          xml_path=xml_path,
                          obj_name=obj_name,
                          keyframe=keyframe,

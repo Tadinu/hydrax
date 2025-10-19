@@ -55,6 +55,7 @@ class PandaBaseEnv(mjx_env.MjxEnv, Task):
         return assets
 
     def __init__(self,
+                 name: str,
                  config: config_dict.ConfigDict,
                  config_overrides: Optional[Dict[str, Union[str, int, list[Any]]]] = None,
                  xml_path: Optional[epath.Path] = None,
@@ -82,7 +83,7 @@ class PandaBaseEnv(mjx_env.MjxEnv, Task):
         if not hasattr(self, "HAND_JOINTS"):
             self.HAND_JOINTS = []
         self._action_scale = config.action_scale
-        Task.__init__(self, xml_path=xml_path, sim_dt=config.sim_dt,
+        Task.__init__(self, name=name, xml_path=xml_path, sim_dt=config.sim_dt,
                       obj_name=obj_name, keyframe=keyframe, trace_sites=trace_sites,
                       warp_enabled=warp_enabled)
 
