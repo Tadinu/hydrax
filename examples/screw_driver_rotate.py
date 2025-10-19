@@ -5,17 +5,16 @@ import mujoco as mj
 from evosax.algorithms.distribution_based import Sep_CMA_ES
 from hydrax.algs import CEM, ICEM, MPPI, Evosax, PredictiveSampling
 from hydrax.simulation.deterministic import run_interactive
-from hydrax.tasks.cube_relocate_task import CubeRelocateTask
+from hydrax.tasks.screw_driver_rotate_task import ScrewDriverRotateTask
 
 """
-Run an interactive simulation of the cube relocating task.
+Run an interactive simulation of the screw driver rotating task.
 
-Double click on the floating target cube, then change the goal orientation with
-[ctrl + left click].
+Double click on the floating target, then change the goal orientation with [ctrl + left click].
 """
 
 # Define the task (cost and dynamics)
-task = CubeRelocateTask(name="Cube Relocate", warp_enabled=False)
+task = ScrewDriverRotateTask(name="Screw Driver Rotation", warp_enabled=False)
 
 # Parse command-line arguments
 parser = argparse.ArgumentParser(

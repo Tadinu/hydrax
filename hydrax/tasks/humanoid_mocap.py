@@ -31,10 +31,9 @@ class HumanoidMocap(Task):
         mj_model = mj.MjModel.from_xml_path(
             ROOT + "/models/g1/scene_23dof.xml"
         )
-        super().__init__(
-            mj_model,
-            trace_sites=["imu_in_torso", "left_foot", "right_foot"],
-        )
+        super().__init__(name="humanoid_mocap",
+                         mj_model=mj_model,
+                         trace_sites=["imu_in_torso", "left_foot", "right_foot"])
 
         # Get sensor IDs
         self.left_foot_pos_sensor = mj.mj_name2id(

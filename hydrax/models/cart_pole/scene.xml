@@ -3,6 +3,7 @@
   <include file="cart_pole.xml"/>
 
   <statistic center="0.0 0.0 1.0" extent="3.0"/>
+  <size nuserdata="1"/>
 
   <visual>
     <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>

@@ -178,7 +178,7 @@ def run_interactive(  # noqa: PLR0912, PLR0915
             )
 
         grasp_site_name = "leap_rh/grasp_site"
-        obj = mj_data.body("cube")
+        obj = mj_data.body(controller.task._obj_name)
         IDENTITY_WXYZ = np.array([1., 0., 0., 0.])
         while viewer.is_running():
             start_time = time.time()

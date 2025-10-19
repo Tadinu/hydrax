@@ -15,7 +15,8 @@ class CartPole(Task):
         mj_model = mj.MjModel.from_xml_path(
             ROOT + "/models/cart_pole/scene.xml"
         )
-        super().__init__(mj_model, trace_sites=["tip"])
+        super().__init__(name="cart_pole",
+                         mj_model=mj_model, trace_sites=["tip"])
 
     def _distance_to_upright(self, state: mjx.Data) -> jax.Array:
         """Get a measure of distance to the upright position."""

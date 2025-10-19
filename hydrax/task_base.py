@@ -165,6 +165,10 @@ class Task(ABC):
     def xml_path(self) -> str:
         return self._xml_path
 
+    @property
+    def home_qpos(self):
+        return []
+
     def next_phase(self, state: mjx.Data) -> jnp.int32:
         return 0
 
