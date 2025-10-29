@@ -1,0 +1,85 @@
+<mujoco model="cheezit_box_scene">
+  <include file="cheezit_box_freejoint_mjx.xml"/>
+  <!-- timestep=".003" -->
+  <option solver="CG" tolerance="1e-6"
+          density="1.225" viscosity="0.1"/>
+
+  <statistic center="0.15 0 0" extent="0.4" meansize="0.01"/>
+  <size nuserdata="1" memory="11G"/>
+
+  <default>
+    <default class="translation">
+      <position kp="100" dampratio="1" ctrlrange="-.5 .5"/>
+    </default>
+    <default class="rotation">
+      <position kp=".1" dampratio="1" ctrlrange="-10 10"/>
+    </default>
+    <default class="grain">
+        <!-- RGBA
+        (0.7 0.85 1.0 0.7) # aqua water
+        (0.71 0.56 0.45 1) # cacao milk
+        -->
+      <geom type="sphere" size=".007 .007 0.007" mass="1e-2"
+            fluidshape="ellipsoid" fluidcoef="0.5 0.25 1.5 1.0 1.0"
+            rgba="0.71 0.56 0.45 1"/>
+    </default>
+  </default>
+
+  <visual>
+    <global azimuth="120" elevation="-20"/>
+    <headlight diffuse=".8 .8 .8" ambient=".2 .2 .2" specular="1 1 1"/>
+    <rgba force="1 0 0 1"/>
+    <map force="0.01" stiffness="500"/>
+    <scale forcewidth="0.1" contactwidth="0.5" contactheight="0.2"/>
+    <quality shadowsize="8192"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="1 1 1" rgb2="1 1 1" width="800" height="800"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="1 1 1" rgb2="1 1 1" markrgb="0 0 0"
+      width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0"/>
+  </asset>
+
+  <worldbody>
+    <camera name="side" pos="-0.183 0.396 0.296" xyaxes="-0.783 -0.622 -0.000 0.332 -0.419 0.845"/>
+    <geom name="floor" pos="0 0 0" size="0 0 0.01" type="plane" material="groundplane" contype="1" conaffinity="1"/>
+    <body name="target" mocap="true" pos="0.325 0.17 0.4">
+      <geom type="mesh" mesh="cheezit_box_open_thick" class="visual"/>
+    </body>
+
+    <frame name="grain" pos="0 0 0.2">
+      <replicate count="8" offset="0 0 0.01">
+        <body>
+          <freejoint/>
+          <geom class="grain"/>
+        </body>
+      </replicate>
+    </frame>
+  </worldbody>
+
+  <actuator>
+    <general name="LRTx" site="cheezit_box" refsite="reference" gear="1 0 0 0 0 0" class="translation"/>
+    <general name="LRTy" site="cheezit_box" refsite="reference" gear="0 1 0 0 0 0" class="translation"/>
+    <general name="LRTz" site="cheezit_box" refsite="reference" gear="0 0 1 0 0 0" class="translation"/>
+    <general name="LRRx" site="cheezit_box" refsite="reference" gear="0 0 0 1 0 0" class="rotation"/>
+    <general name="LRRy" site="cheezit_box" refsite="reference" gear="0 0 0 0 1 0" class="rotation"/>
+    <general name="LRRz" site="cheezit_box" refsite="reference" gear="0 0 0 0 0 1" class="rotation"/>
+
+    <!--
+    <general name="LRTx" joint="LRTx" ctrlrange="-0.25 0.25" biastype="affine" gainprm="500 0 0" biasprm="0 -200 0"/>
+    <general name="LRTy" joint="LRTy" ctrlrange="-0.25 0.25" biastype="affine" gainprm="500 0 0" biasprm="0 -200 0"/>
+    <general name="LRTz" joint="LRTz" ctrlrange="-0.5 0.5" biastype="affine" gainprm="500 0 0" biasprm="0 -200 0"/>
+    -->
+  </actuator>
+
+  <sensor>
+    <framepos name="cheezit_box_position" objtype="body" objname="cheezit_box"/>
+    <framepos name="cheezit_box_distance_to_target" objtype="body" objname="cheezit_box" reftype="body" refname="target"/>
+    <framequat name="cheezit_box_orientation" objtype="body" objname="cheezit_box"/>
+    <framequat name="cheezit_box_orientation_from_target" objtype="body" objname="cheezit_box" reftype="body" refname="target"/>
+    <framelinvel name="cheezit_box_linear_vel" objtype="body" objname="cheezit_box"/>
+    <frameangvel name="cheezit_box_angular_vel" objtype="body" objname="cheezit_box"/>
+    <frameangacc name="cheezit_box_angular_acc" objtype="body" objname="cheezit_box"/>
+  </sensor>
+</mujoco>
