@@ -50,7 +50,7 @@ class ScrewDriverRotateTask(Task):
     def __init__(self, name: str, warp_enabled: bool = False) -> None:
         """Load the MuJoCo model and set task parameters."""
 
-        self.FINGER_TIPS_NAMES = ["if_tip", "mf_tip", "rf_tip", "th_tip"]
+        self.FINGER_TIPS_NAMES = ["mf_tip"]  # "th_tip", "if_tip",  "rf_tip",
         super().__init__(name,
                          xml_path=epath.Path(
                              ROOT) / "models" / "leap_hand" / "scene_leap_rh_mjx_rotate_screw_driver.xml",
@@ -182,8 +182,8 @@ class ScrewDriverRotateTask(Task):
         reaching_cost = 100 * jnp.maximum(
             squared_distance - self.grasp_threshold ** 2, 0.0
         )
-        head_cost = 10000 * self._get_screw_driver_head_distance_to_target_head(data)
-        position_cost = 0.1 * squared_distance + reaching_cost + head_cost
+        # head_cost = 10000 * self._get_screw_driver_head_distance_to_target_head(data)
+        position_cost = 0.1 * squared_distance + reaching_cost  # + head_cost
         orientation_cost = 5000000 * self._get_screw_driver_orientation_distance_to_target(data)
         grasp_cost = 0.001 * jnp.sum(jnp.square(control))  # + self._get_fingertips_cost(data)
         return position_cost + orientation_cost + grasp_cost

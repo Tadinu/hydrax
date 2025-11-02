@@ -1,5 +1,5 @@
 <mujoco model="leap_scene">
-  <include file="leap_rh_mjx.xml"/>
+  <include file="leap_rh_middle_thumb_mjx.xml"/>
   <include file="../screw_driver/screw_driver.xml"/>
 
   <statistic center="0.15 0 0" extent="0.4" meansize="0.01"/>
@@ -45,7 +45,7 @@
   <worldbody>
     <camera name="side" pos="-0.183 0.396 0.296" xyaxes="-0.783 -0.622 -0.000 0.332 -0.419 0.845"/>
     <geom name="floor" pos="0 0 0" size="0 0 0.01" type="plane" material="groundplane" contype="1" conaffinity="1"/>
-    <body name="target" mocap="true" pos="-0.05 0 0.1"> <!--pos="0.325 0.17 0.4"-->
+    <body name="target" mocap="true" pos="0.325 0.17 0.4"> <!--pos="0.325 0.17 0.4"-->
       <geom type="box" size=".02 .02 .07" mass=".108" material="oriented_screw_driver" contype="0" conaffinity="0" group="2"/>
       <site name="target_head_a" rgba="0.5 0 0 1" type="sphere" size="0.01" pos="0 0 0.07" />
       <site name="target_head_b" rgba="0 0.5 0 1" type="sphere" size="0.01" pos="0 0 -0.07" />
@@ -56,10 +56,7 @@
     <!-- screw_driver. -->
     <framepos name="screw_driver_position" objtype="body" objname="screw_driver"/>
     <contact name="screw_driver_contact_with_palm" geom1="screw_driver" geom2="palm_visual" data="found force"/>
-    <contact name="screw_driver_contact_with_th_tip" geom1="screw_driver" geom2="th_tip" data="found force"/>
-    <contact name="screw_driver_contact_with_if_tip" geom1="screw_driver" geom2="if_tip" data="found force"/>
     <contact name="screw_driver_contact_with_mf_tip" geom1="screw_driver" geom2="mf_tip" data="found force"/>
-    <contact name="screw_driver_contact_with_rf_tip" geom1="screw_driver" geom2="rf_tip" data="found force"/>
     <framepos name="screw_driver_distance_to_grasp" objtype="body" objname="screw_driver" reftype="site" refname="grasp_site" />
     <framepos name="screw_driver_distance_to_target" objtype="body" objname="screw_driver" reftype="body" refname="target"/>
     <framequat name="screw_driver_orientation" objtype="body" objname="screw_driver"/>
@@ -75,10 +72,7 @@
 
     <!-- hand. -->
     <framepos name="palm_position" objtype="site" objname="grasp_site"/>
-    <framepos name="th_tip_distance_to_screw_driver" objtype="site" objname="th_tip" reftype="body" refname="screw_driver"/>
-    <framepos name="if_tip_distance_to_screw_driver" objtype="site" objname="if_tip" reftype="body" refname="screw_driver"/>
     <framepos name="mf_tip_distance_to_screw_driver" objtype="site" objname="mf_tip" reftype="body" refname="screw_driver"/>
-    <framepos name="rf_tip_distance_to_screw_driver" objtype="site" objname="rf_tip" reftype="body" refname="screw_driver"/>
 
     <!-- goal. -->
     <framequat name="screw_driver_goal_orientation" objtype="body" objname="target"/>

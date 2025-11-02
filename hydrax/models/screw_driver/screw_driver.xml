@@ -20,10 +20,12 @@
     <worldbody>
         <light pos="0 0 1"/>
         <body name="screw_driver" pos="-0.05 0 0.1" quat="1 0 0 0">
+            <!--
             <joint name="Rx" pos="0 0 0" axis="1 0 0" type="hinge" range="-1000.57 1000.57" damping="0.01"
                    armature="0.01"/>
             <joint name="Ry" pos="0 0 0" axis="0 1 0" type="hinge" range="-1000.57 1000.57" damping="0.01"
                    armature="0.01"/>
+            -->
             <joint name="Rz" pos="0 0 0" axis="0 0 1" type="hinge" range="-1000.57 1000.57" damping="0.01"
                    armature="0.01"/>
             <geom name="screw_driver" type="box" size=".02 .02 .07" material="oriented_screw_driver"
