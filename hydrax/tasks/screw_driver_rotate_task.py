@@ -19,18 +19,18 @@ from hydrax.task_base import Task
 # mjmanip
 from mjmanip.utils import mj_body_qids
 
-HAND_BASE_POSE = [np.array([-0.15, 0.0, 0.17]),
-                  np.array([0.0, 1.0, 0.0, 0.0])]  # np.array([0.000, 0.707, 0.0, 0.707])
-HAND_HOME_QPOS = [
-    0.8, 0, 0.8, 0.8,
-    0.8, 0, 0.8, 0.8,
-    0.8, 0, 0.8, 0.8,
-    0.8, 0.8, 0.8, 0,
-]
-
 
 class ScrewDriverRotateTask(Task):
     """Screw Driver rotation with the LEAP hand."""
+    HAND_BASE_POSE = [np.array([-0.15, 0.0, 0.17]),
+                      np.array([0.0, 1.0, 0.0, 0.0])]  # np.array([0.000, 0.707, 0.0, 0.707])
+    HAND_HOME_QPOS = [
+        0.8, 0, 0.8, 0.8,
+        0.8, 0, 0.8, 0.8,
+        0.8, 0, 0.8, 0.8,
+        0.8, 0.8, 0.8, 0,
+    ]
+    BASE_BODY_NAME = "leap_mount"
 
     def get_assets(self) -> Dict[str, bytes]:
         assets = {}
@@ -47,21 +47,22 @@ class ScrewDriverRotateTask(Task):
         mjx_env.update_assets(assets, path / "reorientation_cube_textures")
         return assets
 
-    def __init__(self, name: str, warp_enabled: bool = False) -> None:
+    def __init__(self, name: str, warp_enabled: bool = False,
+                 xml_path=epath.Path(
+                     ROOT) / "models" / "leap_hand" / "scene_leap_rh_mjx_rotate_screw_driver.xml") -> None:
         """Load the MuJoCo model and set task parameters."""
 
         self.FINGER_TIPS_NAMES = ["if_tip", "mf_tip", "rf_tip", "th_tip"]
         super().__init__(name,
-                         xml_path=epath.Path(
-                             ROOT) / "models" / "leap_hand" / "scene_leap_rh_mjx_rotate_screw_driver.xml",
+                         xml_path=xml_path,
                          obj_name="screw_driver",
                          trace_sites=["grasp_site"] + self.FINGER_TIPS_NAMES,
                          warp_enabled=warp_enabled)
 
         # Move [base_body]
-        base_body = self.mj_model.body("leap_mount")
-        base_body.pos = HAND_BASE_POSE[0]
-        base_body.quat = HAND_BASE_POSE[1]
+        base_body = self.mj_model.body(self.BASE_BODY_NAME)
+        base_body.pos = self.HAND_BASE_POSE[0]
+        base_body.quat = self.HAND_BASE_POSE[1]
 
         # Obj
         self._init_obj_qpos = self._mj_data.qpos[mj_body_qids(self._mj_model, self._obj_name, is_qpos=True)]

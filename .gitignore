@@ -9,3 +9,4 @@ MUJOCO_LOG.TXT
 hydrax/recordings/
 .idea
 build/
+hydrax/mfr/data/

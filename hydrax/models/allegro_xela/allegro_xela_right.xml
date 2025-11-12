@@ -1,0 +1,179 @@
+<mujoco model="hand_object">
+  <compiler angle="radian" meshdir="mesh" autolimits="true"/>
+
+  <option cone="elliptic" impratio="10"/>
+
+  <asset>
+    <mesh name="base_ns" content_type="model/stl" file="allegro/base_ns.stl"/>
+    <mesh name="ft_c" content_type="model/stl" file="ft_c.stl"/>
+    <mesh name="link_0_0_ext" content_type="model/stl" file="allegro/link_0_0_ext.stl"/>
+    <mesh name="link_1_0" content_type="model/stl" file="allegro/link_1_0.stl"/>
+    <mesh name="link_2_0" content_type="model/stl" file="allegro/link_2_0.stl"/>
+    <mesh name="link_3_0" content_type="model/stl" file="allegro/link_3_0.stl"/>
+    <mesh name="link_12_0_right" content_type="model/stl" file="allegro/link_12_0_right.stl"/>
+    <mesh name="link_13_0" content_type="model/stl" file="allegro/link_13_0.stl"/>
+    <mesh name="thumb_1_0" content_type="model/stl" file="allegro/thumb_1_0.stl"/>
+    <mesh name="thumb_2_0" content_type="model/stl" file="allegro/thumb_2_0.stl"/>
+  </asset>
+
+  <default>
+    <default class="allegro_xela_right">
+      <joint axis="0 1 0" damping=".1"/>
+      <position kp="1"/>
+
+      <default class="base">
+        <joint axis="0 0 1" range="-0.47 0.47" actuatorfrcrange="-10 10"/>
+        <position ctrlrange="-0.47 0.47"/>
+      </default>
+      <default class="proximal">
+        <joint range="-0.196 1.61" actuatorfrcrange="-10 10"/>
+        <position ctrlrange="-0.196 1.61"/>
+      </default>
+      <default class="medial">
+        <joint range="-0.174 1.709" actuatorfrcrange="-10 10"/>
+        <position ctrlrange="-0.174 1.709"/>
+      </default>
+      <default class="distal">
+        <joint range="-0.227 1.618" actuatorfrcrange="-10 10"/>
+        <position ctrlrange="-0.227 1.618"/>
+      </default>
+      <default class="thumb_base">
+        <joint axis="-1 0 0" range="0.263 1.396" actuatorfrcrange="-10 10"/>
+        <position ctrlrange="0.263 1.396"/>
+      </default>
+      <default class="thumb_proximal">
+        <joint axis="0 0 1" range="-0.105 1.163" actuatorfrcrange="-10 10"/>
+        <position ctrlrange="-0.105 1.163"/>
+      </default>
+      <default class="thumb_medial">
+        <joint range="-0.189 1.644" actuatorfrcrange="-10 10"/>
+        <position ctrlrange="-0.189 1.644"/>
+      </default>
+      <default class="thumb_distal">
+        <joint range="-0.162 1.719" actuatorfrcrange="-10 10"/>
+        <position ctrlrange="-0.162 1.719"/>
+      </default>
+    </default>
+  </default>
+
+  <worldbody>
+    <body name="allegro_hand_base_link" childclass="allegro_xela_right">
+      <site name="grasp_site" pos="0.03 0 -0.03" rgba="1 0 0 1"/>
+      <geom name="allegro_hand_base" type="mesh" rgba="0 1 1 1" mesh="base_ns"/>
+      <body name="allegro_hand_hitosashi_finger_finger_link_0" pos="0 0.0435 -0.001542" quat="0.999048 -0.0436194 0 0">
+        <joint name="allegro_hand_hitosashi_finger_finger_joint_0" axis="0 0 1" class="base"/>
+        <geom type="mesh" rgba="0.2 0.2 0.2 1" mesh="link_0_0_ext"/>
+        <body name="allegro_hand_hitosashi_finger_finger_link_1" pos="0 0 0.0204">
+          <joint name="allegro_hand_hitosashi_finger_finger_joint_1" pos="0 0 0" axis="0 1 0" class="proximal"/>
+          <geom type="mesh" rgba="0.1 0.1 0.1 1" mesh="link_1_0"/>
+          <body name="allegro_hand_hitosashi_finger_finger_link_2" pos="0 0 0.054">
+            <joint name="allegro_hand_hitosashi_finger_finger_joint_2" pos="0 0 0" axis="0 1 0" class="medial"/>
+            <geom type="mesh" rgba="0.1 0.1 0.1 1" mesh="link_2_0"/>
+            <body name="allegro_hand_hitosashi_finger_finger_link_3" pos="0 0 0.0384">
+              <joint name="allegro_hand_hitosashi_finger_finger_joint_3" pos="0 0 0" axis="0 1 0" class="distal"/>
+              <geom type="mesh" rgba="0.1 0.1 0.1 1" mesh="link_3_0"/>
+              <body name="allegro_hand_hitosashi_finger_finger_0_aftc_base_link" pos="-0.013 0 0.016"
+                    quat="0.5 0.5 0.5 0.5">
+                <geom name="if_tip" type="mesh" mesh="ft_c" rgba="1 1 1 1"/>
+                <site name="if_tip"/>
+                <body name="hitosashi_ee" pos="0 0.03 0"/>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="allegro_hand_naka_finger_finger_link_4" pos="0 0 0.0007">
+        <joint name="allegro_hand_naka_finger_finger_joint_4" pos="0 0 0" axis="0 0 1" class="base"/>
+        <geom type="mesh" rgba="0.2 0.2 0.2 1" mesh="link_0_0_ext"/>
+        <body name="allegro_hand_naka_finger_finger_link_5" pos="0 0 0.0204">
+          <joint name="allegro_hand_naka_finger_finger_joint_5" pos="0 0 0" axis="0 1 0" class="proximal"/>
+          <geom type="mesh" rgba="0.1 0.1 0.1 1" mesh="link_1_0"/>
+          <body name="allegro_hand_naka_finger_finger_link_6" pos="0 0 0.054">
+            <joint name="allegro_hand_naka_finger_finger_joint_6" pos="0 0 0" axis="0 1 0" class="medial"/>
+            <geom type="mesh" rgba="0.1 0.1 0.1 1" mesh="link_2_0"/>
+            <body name="allegro_hand_naka_finger_finger_link_7" pos="0 0 0.0384">
+              <joint name="allegro_hand_naka_finger_finger_joint_7" pos="0 0 0" axis="0 1 0" class="distal"/>
+              <geom type="mesh" rgba="0.1 0.1 0.1 1" mesh="link_3_0"/>
+              <body name="allegro_hand_naka_finger_finger_1_aftc_base_link" pos="-0.013 0 0.016" quat="0.5 0.5 0.5 0.5">
+                <geom name="mf_tip" type="mesh" mesh="ft_c" rgba="1 1 1 1"/>
+                <site name="mf_tip"/>
+                <body name="naka_ee" pos="0 0.03 0"/>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="allegro_hand_kusuri_finger_finger_link_8" pos="0 -0.0435 -0.001542" quat="0.999048 0.0436194 0 0">
+        <joint name="allegro_hand_kusuri_finger_finger_joint_8" pos="0 0 0" axis="0 0 1" class="base"/>
+        <geom type="mesh" rgba="0.2 0.2 0.2 1" mesh="link_0_0_ext"/>
+        <body name="allegro_hand_kusuri_finger_finger_link_9" pos="0 0 0.0204">
+          <joint name="allegro_hand_kusuri_finger_finger_joint_9" pos="0 0 0" axis="0 1 0" class="proximal"/>
+          <geom type="mesh" rgba="0.1 0.1 0.1 1" mesh="link_1_0"/>
+          <body name="allegro_hand_kusuri_finger_finger_link_10" pos="0 0 0.054">
+            <joint name="allegro_hand_kusuri_finger_finger_joint_10" pos="0 0 0" axis="0 1 0" class="medial"/>
+            <geom type="mesh" rgba="0.1 0.1 0.1 1" mesh="link_2_0"/>
+            <body name="allegro_hand_kusuri_finger_finger_link_11" pos="0 0 0.0384">
+              <joint name="allegro_hand_kusuri_finger_finger_joint_11" pos="0 0 0" axis="0 1 0" class="distal"/>
+              <geom type="mesh" rgba="0.1 0.1 0.1 1" mesh="link_3_0"/>
+              <body name="allegro_hand_kusuri_finger_finger_2_aftc_base_link" pos="-0.013 0 0.016"
+                    quat="0.5 0.5 0.5 0.5">
+                <geom name="rf_tip" type="mesh" mesh="ft_c" rgba="1 1 1 1"/>
+                <site name="rf_tip"/>
+                <body name="kusuri_ee" pos="0 0.03 0"/>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="allegro_hand_oya_finger_link_12" pos="-0.0182 0.019333 -0.045987"
+            quat="0.477714 -0.521334 -0.521334 -0.477714">
+        <joint name="allegro_hand_oya_finger_joint_12" pos="0 0 0" axis="-1 0 0" class="thumb_base"/>
+        <geom type="mesh" rgba="0.2 0.2 0.2 1" mesh="link_12_0_right"/>
+        <body name="allegro_hand_oya_finger_link_13" pos="-0.027 0.005 0.0399">
+          <joint name="allegro_hand_oya_finger_joint_13" pos="0 0 0" axis="0 0 1" class="thumb_proximal"/>
+          <geom type="mesh" rgba="0.2 0.2 0.2 1" mesh="link_13_0"/>
+          <body name="allegro_hand_oya_finger_link_14" pos="0 0 0.0177">
+            <joint name="allegro_hand_oya_finger_joint_14" pos="0 0 0" axis="0 1 0" class="thumb_medial"/>
+            <geom type="mesh" rgba="0.1 0.1 0.1 1" mesh="thumb_1_0"/>
+            <body name="allegro_hand_oya_finger_link_15" pos="0 0 0.0514">
+              <joint name="allegro_hand_oya_finger_joint_15" pos="0 0 0" axis="0 1 0" class="thumb_distal"/>
+              <geom type="mesh" rgba="0.1 0.1 0.1 1" mesh="thumb_2_0"/>
+              <body name="allegro_hand_oya_finger_3_aftc_base_link" pos="-0.013 0 0.0315" quat="0.5 0.5 0.5 0.5">
+                <geom name="th_tip" type="mesh" mesh="ft_c" rgba="1 1 1 1"/>
+                <site name="th_tip"/>
+                <body name="oya_ee" pos="0 0.03 0"/>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <contact>
+    <exclude body1="allegro_hand_base_link" body2="allegro_hand_hitosashi_finger_finger_link_0"/>
+    <exclude body1="allegro_hand_base_link" body2="allegro_hand_naka_finger_finger_link_4"/>
+    <exclude body1="allegro_hand_base_link" body2="allegro_hand_kusuri_finger_finger_link_8"/>
+    <exclude body1="allegro_hand_base_link" body2="allegro_hand_oya_finger_link_12"/>
+    <exclude body1="allegro_hand_base_link" body2="allegro_hand_oya_finger_link_13"/>
+  </contact>
+
+  <actuator>
+    <position name="ffa0" joint="allegro_hand_hitosashi_finger_finger_joint_0" class="base"/>
+    <position name="ffa1" joint="allegro_hand_hitosashi_finger_finger_joint_1" class="proximal"/>
+    <position name="ffa2" joint="allegro_hand_hitosashi_finger_finger_joint_2" class="medial"/>
+    <position name="ffa3" joint="allegro_hand_hitosashi_finger_finger_joint_3" class="distal"/>
+    <position name="mfa0" joint="allegro_hand_naka_finger_finger_joint_4" class="base"/>
+    <position name="mfa1" joint="allegro_hand_naka_finger_finger_joint_5" class="proximal"/>
+    <position name="mfa2" joint="allegro_hand_naka_finger_finger_joint_6" class="medial"/>
+    <position name="mfa3" joint="allegro_hand_naka_finger_finger_joint_7" class="distal"/>
+    <position name="rfa0" joint="allegro_hand_kusuri_finger_finger_joint_8" class="base"/>
+    <position name="rfa1" joint="allegro_hand_kusuri_finger_finger_joint_9" class="proximal"/>
+    <position name="rfa2" joint="allegro_hand_kusuri_finger_finger_joint_10" class="medial"/>
+    <position name="rfa3" joint="allegro_hand_kusuri_finger_finger_joint_11" class="distal"/>
+    <position name="tha0" joint="allegro_hand_oya_finger_joint_12" class="thumb_base"/>
+    <position name="tha1" joint="allegro_hand_oya_finger_joint_13" class="thumb_proximal"/>
+    <position name="tha2" joint="allegro_hand_oya_finger_joint_14" class="thumb_medial"/>
+    <position name="tha3" joint="allegro_hand_oya_finger_joint_15" class="thumb_distal"/>
+  </actuator>
+</mujoco>
