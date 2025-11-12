@@ -13,12 +13,18 @@ import mujoco as mj
 import mujoco.viewer
 from mujoco import mjx
 
-# robotsuite
-from robosuite.utils.binding_utils import MjSimState
-
 # hydrax
-from hydrax import DATA_DIR
-from hydrax.data_collector import DataCollector
+from hydrax.utils.video import VideoRecorder
+
+# mjmanip
+from mjmanip.utils import mj_step
+
+DATA_COLLECTION = False
+if DATA_COLLECTION:
+    # robotsuite
+    from robosuite.utils.binding_utils import MjSimState
+    from hydrax import DATA_DIR
+    from hydrax.data_collector import DataCollector
 
 jax.config.update("jax_check_tracer_leaks", True)
 
@@ -69,7 +75,9 @@ class Task(ABC):
         self._mj_data: mj.MjData = None
         self._mjx_model: mjx.Model = None
         self._xml_path: str = ""
-        self._mj_viewer: mj.viewer = None
+        self._mj_viewer: mj.viewer.Handle = None
+        self._mj_renderer: mj.Renderer = None
+        self._mj_recorder: VideoRecorder = None
         if not hasattr(self, "sim_dt"):
             self.sim_dt = sim_dt
         if not hasattr(self, "ctrl_dt"):
@@ -102,7 +110,7 @@ class Task(ABC):
 
         # Data collector
         # tmp_directory = "/tmp/{}".format(str(time.time()).replace(".", "_"))
-        self._data_collector = DataCollector(self, DATA_DIR)
+        self._data_collector = DataCollector(self, DATA_DIR) if DATA_COLLECTION else None
         self._ep_meta = {}
 
     def _construct_system_model(self) -> Optional[mj.MjModel]:
@@ -153,6 +161,10 @@ class Task(ABC):
     def mj_model(self) -> mj.MjModel:
         return self._mj_model
 
+    @property
+    def mj_data(self) -> mj.MjData:
+        return self._mj_data
+
     @property  # -> Consistent with co-parent [mjx_env.MjxEnv]
     def mjx_model(self) -> mjx.Model:
         return self._mjx_model
@@ -173,6 +185,25 @@ class Task(ABC):
         return 0
 
     def step_callback(self, state: mjx.Data):
+        pass
+
+    def step(self, action: np.ndarray, kinematics_only: bool = False):
+        if kinematics_only:
+            # TODO: Use specifically qpos_ids here instead
+            self._mj_data.qpos[:self._mj_model.nu] = action[:self._mj_model.nu]
+        else:
+            self._mj_data.ctrl = action[:self._mj_model.nu]
+        # Still step physically regardless to get physical interaction with objects
+        mj.mj_step(self._mj_model, self._mj_data)
+        if self._mj_viewer:
+            self._mj_viewer.sync()
+            print("STEP", action)
+            if self._mj_renderer and self._mj_recorder and self._mj_recorder.is_recording:
+                self._mj_renderer.update_scene(self._mj_data, self._mj_viewer.cam)
+                frame = self._mj_renderer.render()
+                self._mj_recorder.add_frame(frame.tobytes())
+
+    def reset(self):
         pass
 
     def update_ref_qpos(self, ee_pose: Optional[Union[np.ndarray, jnp.ndarray]] = None) -> None:
