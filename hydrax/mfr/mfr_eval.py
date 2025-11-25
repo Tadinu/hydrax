@@ -120,7 +120,8 @@ mj_data = task.mj_data
 mj_model.opt.timestep = 0.01
 
 
-def main(frequency: float = 25, fixed_camera_id: int = None, record_video: bool = False) -> None:
+def main(frequency: float = 25, fixed_camera_id: int = None, headless: bool = MFR_HEADLESS,
+         record_video: bool = False) -> None:
     """Run an interactive simulation with the MPC controller.
 
     This is a deterministic simulation, with the controller and simulation
@@ -136,6 +137,12 @@ def main(frequency: float = 25, fixed_camera_id: int = None, record_video: bool 
         fixed_camera_id: The camera ID to use for the fixed camera view.
         record_video: Whether to record a video of the simulation.
     """
+    if headless:
+        os.environ["MUJOCO_GL"] = "egl"
+        os.environ["PYOPENGL_PLATFORM"] = "egl"
+        os.environ[
+            "DISPLAY"] = ":0.0"  # NOTE: Run `Xvfb :0.0 -screen 0 720x480x24` on another terminal window beforehand!
+
     # Report the planning horizon in seconds for debugging
     # Figure out how many sim steps to run before replanning
     replan_period = 1.0 / frequency
@@ -218,7 +225,7 @@ def main(frequency: float = 25, fixed_camera_id: int = None, record_video: bool 
                 end="\r",
             )
 
-            if record_video and accum_elapsed >= 2:
+            if record_video and accum_elapsed >= 3600:
                 break
 
     # Preserve the last printout
