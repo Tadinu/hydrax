@@ -8,5 +8,6 @@ __pycache__
 MUJOCO_LOG.TXT
 hydrax/recordings/
 .idea
+.tmp/
 build/
 hydrax/mfr/data/
