@@ -13,4 +13,4 @@ DATA_DIR = os.path.join(ROOT, "data")
 os.environ["XLA_FLAGS"] = "--xla_gpu_triton_gemm_any=true "
 
 # Enable persistent compilation cache
-jax.config.update("jax_compilation_cache_dir", f"{ROOT}/tmp/jax_cache")
+jax.config.update("jax_compilation_cache_dir", f"{ROOT}/.tmp/jax_cache")
