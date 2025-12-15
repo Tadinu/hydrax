@@ -21,7 +21,7 @@ from mujoco_playground._src import mjx_env
 from mujoco_playground._src.mjx_env import State  # pylint: disable=g-importing-member
 
 # hydrax
-from hydrax.tasks.panda.panda_leap_env import PandaLeapEnv, PandaLeap
+from hydrax.tasks.panda.panda_leap_task import PandaLeapEnv, PandaLeap
 from hydrax import ROOT
 
 # mjmanip
@@ -387,7 +387,7 @@ class PandaPickEnv(PandaLeapEnv):
 
     # Palm cost
     def _get_palm_cost(self, data: mjx.Data, encourage: bool = False) -> jax.Array:
-        return -10 * self._get_obj_contact_with_palm(data)  # + self._get_grasp_direction_cost(data)
+        return 10 * self._get_obj_contact_with_palm(data)  # + self._get_grasp_direction_cost(data)
 
     def _get_grasp_direction_cost(self, data: mjx.Data) -> jax.Array:
         z = self.get_sensor_data(data, self.grasp_direction_sensor)[2]
@@ -396,12 +396,12 @@ class PandaPickEnv(PandaLeapEnv):
     # Fingers grasps total cost
     def _get_finger_palms_cost(self, data: mjx.Data) -> jax.Array:
         # cost = 10 * self._get_obj_distance_to_finger_palms(data)
-        cost = -60 * self._get_obj_contact_with_finger_palms(data)
+        cost = 100 * self._get_obj_contact_with_finger_palms(data)
         return cost
 
     def _get_fingertips_cost(self, data: mjx.Data) -> jax.Array:
         # cost = 50 * self._get_finger_tips_distance_to_obj(data)
-        cost = -0.05 * self._get_obj_contact_with_finger_tips(data)
+        cost = 0.05 * self._get_obj_contact_with_finger_tips(data)
         return cost
 
     def _get_fingers_grasps_cost(self, data: mjx.Data) -> jax.Array:
