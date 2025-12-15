@@ -7,8 +7,8 @@ import mujoco as mj
 from hydrax.algs import CEM, ICEM, MPPI, Evosax, PredictiveSampling, DIAL
 from hydrax.simulation.asynchronous import run_interactive as async_run_interactive
 from hydrax.simulation.deterministic import run_interactive as sync_run_interactive
-from hydrax.tasks.panda.panda_open_cabinet_env import PandaOpenCabinetEnv
-from hydrax.tasks.panda.panda_pick_env import PandaPickEnv
+# from hydrax.tasks.panda.panda_open_cabinet_env import PandaOpenCabinetEnv
+from hydrax.tasks.panda.panda_pick_task import PandaPickEnv
 from hydrax.risk import BestCase
 
 # Asynchronous simulations must be wrapped in a __main__ block
@@ -19,7 +19,7 @@ if __name__ == "__main__":
     """
 
     # Define the task (cost and dynamics)
-    use_ctrl_callback = False
+    use_ctrl_callback = True
     task = PandaPickEnv(name="Panda pick", use_ctrl_callback=use_ctrl_callback, warp_enabled=False)
 
     # Parse command-line arguments

@@ -243,7 +243,7 @@ def run_interactive(  # noqa: PLR0912, PLR0915
                     mj_data.ctrl[:] = us[i]
                 else:
                     mj_data.ctrl[:7] = ArmHandDiffIK.dls_ik(mj_model, mj_data, us[i, :6], grasp_site_name,
-                                                            dt=mj_model.opt.timestep)
+                                                            dt=mj_model.opt.timestep)[:7]
                     mj_data.ctrl[7:] = us[i, 6:]
                 mj.mj_step(mj_model, mj_data)
                 viewer.sync()

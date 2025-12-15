@@ -15,7 +15,7 @@ from mujoco_playground._src import mjx_env
 
 # hydrax
 from hydrax import ROOT
-from hydrax.tasks.panda.panda_base_env import PandaBaseEnv
+from hydrax.tasks.panda.panda_base_task import PandaBaseEnv
 
 _HERE = Path(__file__).parent
 

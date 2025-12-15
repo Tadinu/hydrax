@@ -28,7 +28,7 @@ from mujoco_playground._src import mjx_env
 from mujoco_playground._src.mjx_env import State  # pylint: disable=g-importing-member
 
 from hydrax.task_base import Task
-from hydrax.tasks.panda.panda_base_env import PandaBaseEnv
+from hydrax.tasks.panda.panda_base_task import PandaBaseEnv
 from hydrax import ROOT
 
 
