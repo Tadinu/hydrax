@@ -1,15 +1,41 @@
 import argparse
+import hydra
+from hydra.core.config_store import ConfigStore
+from omegaconf import DictConfig, OmegaConf
 
-import evosax
-from evosax.algorithms.distribution_based import Sep_CMA_ES
+# MuJoCo
 import mujoco as mj
 
+# Hydrax
+from evosax.algorithms.distribution_based import Sep_CMA_ES
+from hydrax import ROOT
 from hydrax.algs import CEM, ICEM, MPPI, Evosax, PredictiveSampling, DIAL
 from hydrax.simulation.asynchronous import run_interactive as async_run_interactive
 from hydrax.simulation.deterministic import run_interactive as sync_run_interactive
 # from hydrax.tasks.panda.panda_open_cabinet_env import PandaOpenCabinetEnv
 from hydrax.tasks.panda.panda_pick_task import PandaPickEnv
 from hydrax.risk import BestCase
+
+# mjmanip
+from mjmanip.control.fabrics.fabrics.arm_hand_pose_fabric import ArmHandPoseFabricConfig
+
+FABRICS_CONFIGS_DIR = f"{ROOT}/control/fabrics/configs"
+
+cs = ConfigStore.instance()
+cs.store(name="panda_leap_mujoco", node=ArmHandPoseFabricConfig)
+
+cfg_name = "panda_leap_mujoco"
+
+fabric_cfg = None
+
+
+@hydra.main(version_base=None, config_path=FABRICS_CONFIGS_DIR, config_name=cfg_name)
+def fetch_fabric_config(cfg: DictConfig) -> None:
+    global fabric_cfg
+    fabric_cfg = OmegaConf.to_object(cfg)
+    assert type(fabric_cfg) == ArmHandPoseFabricConfig
+    # print(OmegaConf.to_yaml(fabric_cfg))
+
 
 # Asynchronous simulations must be wrapped in a __main__ block
 # https://docs.python.org/3/library/multiprocessing.html
@@ -20,7 +46,10 @@ if __name__ == "__main__":
 
     # Define the task (cost and dynamics)
     use_ctrl_callback = True
-    task = PandaPickEnv(name="Panda pick", use_ctrl_callback=use_ctrl_callback, warp_enabled=False)
+    fetch_fabric_config()
+    task = PandaPickEnv(name="Panda pick",
+                        fabric_cfg=fabric_cfg if use_ctrl_callback else None,
+                        use_ctrl_callback=use_ctrl_callback, warp_enabled=True)
 
     # Parse command-line arguments
     parser = argparse.ArgumentParser(

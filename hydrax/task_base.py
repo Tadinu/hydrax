@@ -92,6 +92,7 @@ class Task(ABC):
         self.u_max = u_max
         self.num_ctrls: int = u_min.size if u_min is not None else 0
         self.ctrl_callback: Optional[Callable[[mjx.Data, jax.Array], jax.Array]] = None
+        self.num_samples: int = 0
 
         # MJ-Model
         if mj_model is not None:

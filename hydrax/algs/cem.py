@@ -71,6 +71,7 @@ class CEM(SamplingBasedController):
             )
         super().__init__(
             task,
+            num_samples=num_samples,
             num_randomizations=num_randomizations,
             risk_strategy=risk_strategy,
             seed=seed,
@@ -80,7 +81,6 @@ class CEM(SamplingBasedController):
             iterations=iterations,
             ctrl_callback=ctrl_callback
         )
-        self.num_samples = num_samples
         self.sigma_min = sigma_min
         self.sigma_start = sigma_start
         self.num_elites = num_elites

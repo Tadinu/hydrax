@@ -11,3 +11,4 @@ hydrax/recordings/
 .tmp/
 build/
 hydrax/mfr/data/
+examples/outputs/

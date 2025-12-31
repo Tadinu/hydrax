@@ -54,6 +54,7 @@ class CubeRelocateTask(Task):
     def __init__(self, name: str, warp_enabled: bool = False) -> None:
         """Load the MuJoCo model and set task parameters."""
 
+        self.HAND_MODEL_NAME = "leap_rh_mjx"
         self.FINGER_TIPS_NAMES = ["if_tip", "mf_tip", "rf_tip", "th_tip"]
         super().__init__(name,
                          xml_path=epath.Path(ROOT) / "models" / "leap_hand" / "scene_leap_rh_mjx_relocate_cube.xml",
