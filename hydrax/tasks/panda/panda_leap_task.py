@@ -1,37 +1,77 @@
 from typing import Any, Dict, Optional, Union
 from pathlib import Path
+from functools import partial
 from etils import epath
 from ml_collections import config_dict
 import numpy as np
+import warp as wp
 
-import mujoco as mj
-from mujoco import mjx
-
-import mink
-from mjmanip.utils import mj_add_mocap_body, mj_set_body_tree_collision_enabled
+# jax
+import jax
+from jax import jit
+import jax.numpy as jnp
 
 # mujoco playground
+import mujoco as mj
+from mujoco import mjx
 from mujoco_playground._src import mjx_env
 
+import mink
+from mjmanip.utils import mj_add_mocap_body, mj_get_joints_qids, mj_get_mocap_pose, mj_set_body_tree_collision_enabled
+from mjmanip.mjx_utils import mjx_mulPose
+from mjmanip.control.fabrics.fabrics.arm_hand_pose_fabric import ArmHandPoseFabricConfig
+from mjmanip.control.fabrics.fabrics_controller import FabricsController
+from mjmanip.robot.panda_leap_fabrics import PANDA_LEAP_FABRIC_PALM_CONTROL_FRAME_NAMES, \
+    PANDA_LEAP_FABRIC_FINGER_CONTROL_FRAME_NAMES
+
 # hydrax
-from hydrax import ROOT
+from hydrax import ROOT, MODELS_DIR
 from hydrax.tasks.panda.panda_base_task import PandaBaseEnv
 
 _HERE = Path(__file__).parent
 
 IDENTITY_WXYZ = np.array([1.0, 0.0, 0.0, 0.0])
 ZERO_XYZ = np.zeros(3)
+IDENTITY_POSE = np.concatenate([ZERO_XYZ, IDENTITY_WXYZ])
 
 
 class PandaLeap:
+    PANDA_LEAP_MODEL_DIR = f"{MODELS_DIR}/panda_leap"
+    PANDA_LEAP_ASSETS_DIR = f"{PANDA_LEAP_MODEL_DIR}/assets"
+
+    BASE_POSE = IDENTITY_POSE
+    VISUAL_CLASS_NAMES: list[str] = []
+    COLLISION_CLASS_NAMES: list[str] = []
+
     # panda
     ARM_HOME_QPOS = [0, 0.3, 0, -1.57079, 0, 2.0, -0.7853]
     ARM_HAND_ATTACHMENT_SITE_NAME = "attachment_site"
     ARM_DOFS_NO = len(ARM_HOME_QPOS)
     ARM_BODIES_NAMES = []
-    ARM_JOINTS = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6", "joint7"]
+    ARM_JOINTS_NAMES = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6", "joint7"]
     ARM_GEOMS = ["link0_c", "link1_c", "link2_c", "link3_c", "link4_c", "link5_c0", "link5_c1", "link5_c2", "link6_c",
                  "link7_c"]
+
+    # Get Fabrics joints info from FabricCSpaceInfo loaded from model description
+    ARM_FABRICS_JOINTS_NAMES = [
+        'link0_joint',
+        'joint1',
+        'joint2',
+        'link2_fabric1_joint',  # Fabric-Fixed
+        'link2_fabric2_joint',  # Fabric-Fixed
+        'joint3',
+        'link3_fabric_joint',  # Fabric-Fixed
+        'joint4',
+        'link4_fabric1_joint',  # Fabric-Fixed
+        'link4_fabric2_joint',  # Fabric-Fixed
+        'joint5',
+        'link5_fabric1_joint',  # Fabric-Fixed
+        'link5_fabric2_joint',  # Fabric-Fixed
+        'joint6',
+        'link6_fabric_joint',  # Fabric-Fixed
+        'joint7',
+        'link7_fabric_joint',  # Fabric-Fixed
+    ]
 
     # leap hand
     # To be determined upon reading from xml in system construction
@@ -46,11 +86,72 @@ class PandaLeap:
     HAND_DOFS_NO = len(HAND_HOME_QPOS)
     HAND_BASE_POSE = [np.array([0.0, 0.0, 0.13]), np.array([0.707, 0, -0.707, 0])]
     HAND_BODIES_NAMES = []
-    HAND_JOINTS = [
+    HAND_JOINTS_NAMES = [
         "if_mcp", "if_rot", "if_pip", "if_dip",
         "mf_mcp", "mf_rot", "mf_pip", "mf_dip",
         "rf_mcp", "rf_rot", "rf_pip", "rf_dip",
         "th_cmc", "th_axl", "th_mcp", "th_ipl"
+    ]
+
+    HAND_FABRICS_BODIES_NAMES = HAND_BODIES_NAMES
+    HAND_FABRICS_JOINTS_NAMES = [
+        # LEAP-MOUNT
+        f'{HAND_BASE_NAME}_joint',  # Fixed joint
+        f'{HAND_BASE_NAME}_fabric_joint',  # Fixed joint
+
+        # PALM
+        'palm_joint',  # Fixed joint
+        'palm_fabric_joint',  # Fabric-Fixed
+
+        # INDEX
+        'if_bs_fabric_joint',  # Fabric-Fixed
+        'if_mcp',
+        'if_rot',
+        'if_px_fabric1_joint',  # Fabric-Fixed
+        'if_px_fabric2_joint',  # Fabric-Fixed
+        'if_pip',
+        'if_dip',
+        'if_ds_fabric1_joint',  # Fabric-Fixed
+        'if_ds_fabric2_joint',  # Fabric-Fixed
+
+        # MIDDLE
+        'mf_bs_fabric_joint',  # Fabric-Fixed
+        'mf_mcp',
+        'mf_rot',
+        'mf_px_fabric1_joint',  # Fabric-Fixed
+        'mf_px_fabric2_joint',  # Fabric-Fixed
+        'mf_pip',
+        'mf_dip',
+        'mf_ds_fabric1_joint',  # Fabric-Fixed
+        'mf_ds_fabric2_joint',  # Fabric-Fixed
+
+        # RING
+        'rf_bs_fabric_joint',  # Fabric-Fixed
+        'rf_mcp',
+        'rf_rot',
+        'rf_px_fabric1_joint',  # Fabric-Fixed
+        'rf_px_fabric2_joint',  # Fabric-Fixed
+        'rf_pip',
+        'rf_dip',
+        'rf_ds_fabric1_joint',  # Fabric-Fixed
+        'rf_ds_fabric2_joint',  # Fabric-Fixed
+
+        # THUMB
+        'th_cmc',
+        'th_axl',
+        'th_mcp',
+        'th_px_fabric_joint',  # Fabric-Fixed
+        'th_ipl',
+        'th_ds_fabric1_joint',  # Fabric-Fixed
+        'th_ds_fabric2_joint',  # Fabric-Fixed
+
+        # PALM-XYZ
+        'palm_x_joint',  # Fabric-Fixed
+        'palm_x_neg_joint',  # Fabric-Fixed
+        'palm_y_joint',  # Fabric-Fixed
+        'palm_y_neg_joint',  # Fabric-Fixed
+        'palm_z_joint',  # Fabric-Fixed
+        'palm_z_neg_joint',  # Fabric-Fixed
     ]
 
     HAND_GEOMS = ["leap_mount_collision_0", "leap_mount_collision_1"]
@@ -61,25 +162,25 @@ class PandaLeap:
 
     # fingers
     FINGER_GEOMS = [
-        "if_bs_collision_1",
+        "if_bs_collision",
         "if_px_collision",
         "if_md_collision_1",
-        "if_md_collision_5",
-        "if_ds_collision_1",
-        "mf_bs_collision_1",
+        "if_md_collision_2",
+        "if_ds_collision",
+        "mf_bs_collision",
         "mf_px_collision",
         "mf_md_collision_1",
-        "mf_md_collision_5",
-        "mf_ds_collision_1",
-        "rf_bs_collision_1",
+        "mf_md_collision_2",
+        "mf_ds_collision",
+        "rf_bs_collision",
         "rf_px_collision",
         "rf_md_collision_1",
-        "rf_md_collision_5",
-        "rf_ds_collision_1",
+        "rf_md_collision_2",
+        "rf_ds_collision",
         "th_mp_collision",
-        # "th_bs_collision_1",
-        "th_px_collision_1",
-        "th_ds_collision_1",
+        # "th_bs_collision",
+        "th_px_collision",
+        "th_ds_collision",
     ]
 
     # fingertips
@@ -97,6 +198,20 @@ class PandaLeap:
     # Actuators
     ACTUATED_JOINTS_NO = len(HOME_QPOS)
     ACTS_NO = ACTUATED_JOINTS_NO
+
+    # OBJECTS
+    OBJECT_NAMES: list[str] = ['cube']  # ['nonconvex_mug']
+    OBJECT_MODEL_PATHS: dict[str, str] = {
+        # 'cube': f"{MODELS_DIR}/cube/reorientation_cube.xml",
+        # 'nonconvex_mug': f"{MODELS_DIR}/objects/mug/mug.xml",
+    }
+    OBJECT_INIT_POSES: dict[str, np.ndarray] = {
+        obj_name: np.hstack([np.array([0, 0.5, 1]), IDENTITY_WXYZ])
+        for obj_name in OBJECT_NAMES
+    }
+    OBJECT_COLLISION_MESH_NAMES: dict[str, list[str]] = {
+        OBJECT_NAMES[0]: []
+    }
 
     def __init__(self):
         # Received from a client of this class, which is expected to have its own custom
@@ -136,7 +251,7 @@ class PandaLeap:
         prefix = cls.attach_prefix()
         cls.HAND_BASE_NAME = f"{prefix}{cls.HAND_BASE_NAME}"
         cls.HAND_BODIES_NAMES = [f"{prefix}{_}" for _ in cls.HAND_BODIES_NAMES]
-        cls.HAND_JOINTS = [f"{prefix}{_}" for _ in cls.HAND_JOINTS]
+        cls.HAND_JOINTS_NAMES = [f"{prefix}{_}" for _ in cls.HAND_JOINTS_NAMES]
         cls.HAND_GEOMS = [f"{prefix}{_}" for _ in cls.HAND_GEOMS]
         cls.FINGER_GEOMS = [f"{prefix}{_}" for _ in cls.FINGER_GEOMS]
 
@@ -147,6 +262,10 @@ class PandaLeap:
                 for hand_body in cls.HAND_BODIES_NAMES:
                     if not hand_body.endswith("world"):
                         spec.add_exclude(bodyname1=arm_body, bodyname2=hand_body)
+
+    @classmethod
+    def goal_name(cls, obj_name: str) -> str:
+        return f"{obj_name}_goal"
 
     def setup(self, model: mj.MjModel, data: mj.MjData) -> None:
         self.mj_model = model
@@ -194,7 +313,7 @@ class PandaLeap:
             (["link3"], ["floor"]),
         ]
         # Max velocities
-        max_velocities = {joint: np.pi for joint in self.ARM_JOINTS}
+        max_velocities = {joint: np.pi for joint in self.ARM_JOINTS_NAMES}
 
         self.limits = [
             mink.ConfigurationLimit(model=self.mj_model),
@@ -244,6 +363,16 @@ class PandaLeap:
             frame_quat=self.EE_TARGET_QUAT_DEFAULT,
         )
 
+    def get_joint_positions(self):
+        return self.main_data.qpos.copy()
+
+    def get_ee_target_mocap_pose(self) -> np.ndarray:
+        ee_target_mocap_pose = mj_get_mocap_pose(self.main_data, self.EE_TARGET_MOCAP_NAME)
+        ee_target_mocap_pose = np.concatenate([ee_target_mocap_pose[0], ee_target_mocap_pose[1]])
+        # NOTE: This is unclear why incorrect (at least during the first steps after model building)!
+        # bku_ee_target_mocap_pose = np.concatenate([self.ee_target_mocap.xpos, self.ee_target_mocap.xquat])
+        return ee_target_mocap_pose
+
 
 _ARM_DIR = "panda"
 _GRIPPER_DIR = "leap_hand"
@@ -251,6 +380,9 @@ _GRIPPER_DIR = "leap_hand"
 
 class PandaLeapEnv(PandaBaseEnv):
     """Base environment for Franka Emika Panda and Leap hand."""
+
+    PALM_FABRIC_CONTROL_FRAMES = LEAP_FABRIC_PALM_CONTROL_FRAME_NAMES
+    FINGER_FABRIC_CONTROL_FRAMES = LEAP_FABRIC_FINGER_CONTROL_FRAME_NAMES
 
     def get_assets(self) -> Dict[str, bytes]:
         assets = {}
@@ -271,39 +403,46 @@ class PandaLeapEnv(PandaBaseEnv):
             xml_path: Optional[epath.Path] = None,
             obj_name: Optional[str] = None,
             keyframe: Optional[str] = None,
+            fabric_cfg: Optional[ArmHandPoseFabricConfig] = None,
             use_ctrl_callback: bool = False,
             warp_enabled: bool = False
     ):
         self.arm_xml: str = xml_path.as_posix() if xml_path \
-            else ROOT + "/models/panda/mjx_panda_nohand.xml"
-        self.hand_xml: str = ROOT + "/models/leap_hand/leap_rh_mjx.xml"
+            else MODELS_DIR + ("/panda/mjx_panda_nohand_fabric.xml" if fabric_cfg
+                               else "/panda/mjx_panda_nohand.xml")
+        self.HAND_MODEL_NAME = PandaLeap.HAND_MODEL_NAME = "leap_rh_mjx_fabric" if fabric_cfg else "leap_rh_mjx"
+        self.hand_xml: str = MODELS_DIR + ("/leap_hand/leap_rh_mjx_fabric.xml" if fabric_cfg \
+                                               else "/leap_hand/leap_rh_mjx.xml")
         self.arm_spec: mj.MjSpec = None
         self.hand_spec: mj.MjSpec = None
         self.hand_base_spec: mj.MjsBody = None
 
-        self.ARM_JOINTS = PandaLeap.ARM_JOINTS
-        self.HAND_JOINTS = [f"leap_rh/{joint}" for joint in PandaLeap.HAND_JOINTS]
+        self.ARM_JOINTS_NAMES = PandaLeap.ARM_JOINTS_NAMES
+        self.HAND_JOINTS_NAMES = [f"{PandaLeap.HAND_MODEL_NAME}/{joint}" for joint in PandaLeap.HAND_JOINTS_NAMES
+                                  if not joint.startswith(PandaLeap.HAND_MODEL_NAME)]
+        PandaLeap.JOINTS_NAMES = self.ARM_JOINTS_NAMES + self.HAND_JOINTS_NAMES
 
-        self.FINGER_TIPS_NAMES = ["leap_rh/if_tip", "leap_rh/mf_tip", "leap_rh/th_tip"]  # "leap_rh/rf_tip",
+        self.FINGER_TIPS_NAMES = [f"{PandaLeap.HAND_MODEL_NAME}/if_tip", f"{PandaLeap.HAND_MODEL_NAME}/mf_tip",
+                                  f"{PandaLeap.HAND_MODEL_NAME}/th_tip"]  # f"{PandaLeap.HAND_MODEL_NAME}/rf_tip",
 
-        self.FINGER_IF_PALMS_NAMES = [  # "leap_rh/if_bs",
-            # "leap_rh/if_px",
-            "leap_rh/if_md",
-            "leap_rh/if_ds"]
+        self.FINGER_IF_PALMS_NAMES = [  # f"{PandaLeap.HAND_MODEL_NAME}/if_bs",
+            # f"{PandaLeap.HAND_MODEL_NAME}/if_px",
+            f"{PandaLeap.HAND_MODEL_NAME}/if_md",
+            f"{PandaLeap.HAND_MODEL_NAME}/if_ds"]
 
-        self.FINGER_MF_PALMS_NAMES = [  # "leap_rh/mf_bs",
-            # "leap_rh/mf_px",
-            "leap_rh/mf_md",
-            "leap_rh/mf_ds"]
+        self.FINGER_MF_PALMS_NAMES = [  # f"{PandaLeap.HAND_MODEL_NAME}/mf_bs",
+            # f"{PandaLeap.HAND_MODEL_NAME}/mf_px",
+            f"{PandaLeap.HAND_MODEL_NAME}/mf_md",
+            f"{PandaLeap.HAND_MODEL_NAME}/mf_ds"]
 
-        self.FINGER_RF_PALMS_NAMES = [  # "leap_rh/rf_bs",
-            # "leap_rh/rf_px",
-            "leap_rh/rf_md",
-            "leap_rh/rf_ds"]
+        self.FINGER_RF_PALMS_NAMES = [  # f"{PandaLeap.HAND_MODEL_NAME}/rf_bs",
+            # f"{PandaLeap.HAND_MODEL_NAME}/rf_px",
+            f"{PandaLeap.HAND_MODEL_NAME}/rf_md",
+            f"{PandaLeap.HAND_MODEL_NAME}/rf_ds"]
 
-        self.FINGER_TH_PALMS_NAMES = [  # "leap_rh/th_mp",
-            # "leap_rh/th_px",
-            "leap_rh/th_ds"]
+        self.FINGER_TH_PALMS_NAMES = [  # f"{PandaLeap.HAND_MODEL_NAME}/th_mp",
+            # f"{PandaLeap.HAND_MODEL_NAME}/th_px",
+            f"{PandaLeap.HAND_MODEL_NAME}/th_ds"]
 
         self.FINGER_PALMS_NAMES = (self.FINGER_IF_PALMS_NAMES + self.FINGER_MF_PALMS_NAMES +
                                    self.FINGER_RF_PALMS_NAMES + self.FINGER_TH_PALMS_NAMES)
@@ -313,12 +452,31 @@ class PandaLeapEnv(PandaBaseEnv):
                                -0.218949, -0.0318307, 1.25156, 0.840648,
                                1.0593, 0.638801, 0.391599, 0.57284]
 
+        # Fabrics
+        self.fabrics_controller: FabricsController = None
+        self.fabric_cfg: ArmHandPoseFabricConfig = fabric_cfg
+        self.fabric_env_world_file_name: str = 'kuka_allegro_boxes'
+
+        # FABRICS
+        FULL_HAND_FABRICS_JOINTS_NAMES = [f"{PandaLeap.HAND_MODEL_NAME}/{_}" for _ in
+                                          PandaLeap.HAND_FABRICS_JOINTS_NAMES]
+        FULL_HAND_FABRICS_BODIES_NAMES = [f"{PandaLeap.HAND_MODEL_NAME}/{_}" for _ in
+                                          PandaLeap.HAND_BODIES_NAMES]
+        PandaLeap.FABRICS_JOINTS_NAMES = PandaLeap.ARM_FABRICS_JOINTS_NAMES + FULL_HAND_FABRICS_JOINTS_NAMES
+        PandaLeap.FABRICS_BODIES_NAMES = PandaLeap.ARM_BODIES_NAMES + FULL_HAND_FABRICS_BODIES_NAMES
+
         # NOTE: Don't pass [xml_path] to [PandaBaseEnv] here, since the arm+hand model will be programmingly composed
         # -> [self._construct_system_model()] invoked here-in!
         super().__init__(name, config, config_overrides,
                          obj_name=obj_name, keyframe=keyframe,
                          use_ctrl_callback=use_ctrl_callback,
                          warp_enabled=warp_enabled)
+
+        self._init_sensors()
+
+    def _init_sensors(self):
+        self.obj_position_sensor = self.get_sensor_id(f"{self._obj_name}_position")
+        self.obj_orientation_sensor = self.get_sensor_id(f"{self._obj_name}_orientation")
 
     def _init_trace_sites(self):
         self.trace_sites += [
@@ -342,8 +500,8 @@ class PandaLeapEnv(PandaBaseEnv):
         rand_seed = 1
         np.random.seed(100 + rand_seed)
         init_obj_quat = np.zeros(4)
-        init_obj_yaw = np.pi * np.random.rand(1) - np.pi / 2
-        mj.mju_axisAngle2Quat(init_obj_quat, [0.0, 0.0, 1.0], init_obj_yaw)
+        init_obj_yaw = (np.pi * np.random.rand(1) - np.pi / 2).item()
+        mj.mju_axisAngle2Quat(init_obj_quat, np.array([0.0, 0.0, 1.0]), init_obj_yaw)
         self._init_obj_pose = np.hstack((np.array([0.5, 0.5, 0.05]), init_obj_quat))
         init_obj_xy = np.array(
             [self._init_obj_pose[0], self._init_obj_pose[1]]
@@ -357,8 +515,16 @@ class PandaLeapEnv(PandaBaseEnv):
         )
         self._goal_q = np.zeros(4)
         mj.mju_axisAngle2Quat(
-            self._goal_q, [0.0, 0.0, 1.0], np.pi * np.random.rand(1) - np.pi / 2
+            self._goal_q, np.array([0.0, 0.0, 1.0]), (np.pi * np.random.rand(1) - np.pi / 2).item()
         )
+
+    def _get_obj_position(self, data: mjx.Data) -> jax.Array:
+        """Position of the obj in world frame."""
+        return self.get_sensor_data(data, self.obj_position_sensor)
+
+    def _get_obj_orientation(self, data: mjx.Data) -> jax.Array:
+        """Orientation of the obj in world frame."""
+        return self.get_sensor_data(data, self.obj_orientation_sensor)
 
     def has_objs(self) -> bool:
         return self._obj_name is not None
@@ -377,6 +543,8 @@ class PandaLeapEnv(PandaBaseEnv):
         # https://github.com/google-deepmind/mujoco/blob/main/python/mjspec.ipynb
         # https://mj.readthedocs.io/en/latest/python.html#construction
         self.arm_spec = mj.MjSpec.from_file(self.arm_xml)
+        self.arm_spec.meshdir = PandaLeap.PANDA_LEAP_ASSETS_DIR
+        self.arm_spec.texturedir = PandaLeap.PANDA_LEAP_ASSETS_DIR
         # For storing next_phase by [SamplingBasedController._scan_fn]
         self.arm_spec.nuserdata = 1
         self.arm_spec.option.disableflags |= mj.mjtDisableBit.mjDSBL_CLAMPCTRL
@@ -409,7 +577,14 @@ class PandaLeapEnv(PandaBaseEnv):
         attach_site.attach_body(self.hand_spec.worldbody, PandaLeap.attach_prefix())
 
         # Update [PandaLeap] item names after attachment
-        PandaLeap.update_item_names_with_prefix()
+        if self.fabric_cfg:
+            prefix = PandaLeap.attach_prefix()
+            PandaLeap.HAND_BASE_NAME = f"{prefix}{PandaLeap.HAND_BASE_NAME}"
+            PandaLeap.HAND_BODIES_NAMES = [f"{prefix}{_}" for _ in PandaLeap.HAND_BODIES_NAMES]
+            PandaLeap.HAND_GEOMS = [f"{prefix}{_}" for _ in PandaLeap.HAND_GEOMS]
+            PandaLeap.FINGER_GEOMS = [f"{prefix}{_}" for _ in PandaLeap.FINGER_GEOMS]
+        else:
+            PandaLeap.update_item_names_with_prefix()
 
         # Refetch [self.hand_base_spec], which seems to be just the same after attachment, in [self.arm_spec]
         self.hand_base_spec = self.arm_spec.body(PandaLeap.HAND_BASE_NAME)
@@ -556,6 +731,9 @@ class PandaLeapEnv(PandaBaseEnv):
                             # NOTE: Refer to mjNCONDATA for contact bits
                             intprm=[1 | (1 << 3), 2, 1])  # "found dist"
 
+    def main_robot_spec_xml(self) -> str:
+        return self.arm_spec.to_xml()
+
     def _post_init(self) -> None:
         super()._post_init()
 
@@ -573,6 +751,36 @@ class PandaLeapEnv(PandaBaseEnv):
         )
         self._max_torque = 8.0
 
+        # Fabrics
+        if self.fabric_cfg is not None:
+            self._init_fabrics()
+
+    def _init_fabrics(self):
+        self.fabrics_robot = PandaLeap()
+        self.fabrics_robot.main_model = self.mj_model
+        self.fabrics_robot.main_data = self.mj_data
+        self.fabrics_robot.robot_qpos_ids = mj_get_joints_qids(self.mj_model, PandaLeap.JOINTS_NAMES, is_qpos=True)
+        # NOTE: MjData is created here-in if needed in robot's configuration
+        self.fabrics_controller = FabricsController(robot=self.fabrics_robot,
+                                                    palm_control_frames=self.PALM_FABRIC_CONTROL_FRAMES,
+                                                    finger_control_frames=self.FINGER_FABRIC_CONTROL_FRAMES,
+                                                    fabric_cfg=self.fabric_cfg,
+                                                    object_model_paths=self.fabrics_robot.OBJECT_MODEL_PATHS,
+                                                    object_collision_mesh_names=self.fabrics_robot.OBJECT_COLLISION_MESH_NAMES,
+                                                    robot_path_or_xml=self.main_robot_spec_xml(),
+                                                    env_world_file_name=self.fabric_env_world_file_name,
+                                                    use_finger_fabrics=False,
+                                                    use_cuda_graph=True,
+                                                    batch_size=1)
+        from warp.jax_experimental import jax_callable
+        from warp._src.jax_experimental.ffi import GraphMode
+
+        def wp_fabrics_step(in_arr: wp.array(dtype=float), out_arr: wp.array(dtype=float)):
+            self.fabrics_controller.step(wp.to_torch(in_arr))
+            out_arr.assign(wp.from_torch(self.fabrics_controller.q))
+
+        self.jax_fabrics_step = jit(jax_callable(wp_fabrics_step, graph_mode=GraphMode.WARP))
+
     def _init_hand(self):
         self._palm_center = self.mj_model.site(PandaLeap.hand_item_full_name("palm_center")).id
         self._grasp_site = self.mj_model.site(PandaLeap.hand_item_full_name("grasp_site")).id
@@ -585,3 +793,47 @@ class PandaLeapEnv(PandaBaseEnv):
 
     def _free_joint_name(self, body_name: str):
         return f"{body_name}_freejoint"
+
+    @partial(jit, static_argnums=(0,))
+    def mjx_integrate_pos(self, qpos: jnp.ndarray, qvel: jnp.ndarray, dt: float) -> jnp.ndarray:
+        return mjx._src.forward._integrate_pos(self.mjx_model.jnt_type, qpos, qvel, dt)
+
+    @partial(jit, static_argnums=(0,))
+    def mjx_convert_free_hand_to_full_arm_hand_ctrl(self, mjx_data: mjx.Data, u: jnp.ndarray) -> jnp.ndarray:
+        grasp_site_ctrl = u[:6]  # 6DOF in 3D
+        hand_ctrl = u[6:]
+        full_ctrl = None
+        if True:
+            # Jac of [self._grasp_site]
+            jacp, jacr = mjx.jac(self.mjx_model, mjx_data,
+                                 mjx_data.site_xpos[self._grasp_site].ravel(),
+                                 self.mjx_model.site_bodyid[self._grasp_site])
+            J = jnp.vstack([jacp.T, jacr.T])  # (6, nv)
+
+            # damped least-squares solve: qvel = J^T (J J^T + λ^2 I)^-1 v
+            damp = 0.01  # λ
+            diag = (damp ** 2) * jnp.eye(6)
+            JJt = J @ J.T
+            full_ctrl = J.T @ jnp.linalg.solve(JJt + diag, grasp_site_ctrl)
+            full_ctrl = self.mjx_integrate_pos(mjx_data.qpos.copy(), full_ctrl.copy(), self.mj_model.opt.timestep)
+            full_ctrl = full_ctrl.at[7:23].set(hand_ctrl)
+            full_ctrl = full_ctrl[:23]
+        else:
+            hand_base_pose = f(grasp_site_ctrl)
+            self.diff_ik_mjx.last_solved_q = self.diff_ik_mjx.solve(hand_base_pose)
+            full_ctrl = self.diff_ik_mjx.last_solved_q
+        return full_ctrl
+
+    @partial(jit, static_argnums=(0,))
+    def mjx_fabrics_convert_free_hand_to_full_arm_hand_ctrl(self, mjx_data: mjx.Data, u: jnp.ndarray) -> jnp.ndarray:
+        grasp_site_delta = jnp.zeros(7)
+        grasp_site_ctrl = self.mjx_model.opt.timestep * u[:6]  # 6DOF in 3D
+
+        # Delta grasp pose
+        grasp_site_delta.at[:3].set(grasp_site_ctrl[:3])
+        from brax import math
+        grasp_site_delta.at[3:].set(math.euler_to_quat(grasp_site_ctrl[3:]))
+
+        obj_pose = jnp.concatenate([self._get_obj_position(mjx_data), self._get_obj_orientation(mjx_data)])
+        self.jax_fabrics_step(mjx_mulPose(obj_pose, grasp_site_delta))
+        return jax.dlpack.from_dlpack(self.fabrics_controller.q).squeeze()

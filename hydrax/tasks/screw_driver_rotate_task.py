@@ -52,6 +52,7 @@ class ScrewDriverRotateTask(Task):
                      ROOT) / "models" / "leap_hand" / "scene_leap_rh_mjx_rotate_screw_driver.xml") -> None:
         """Load the MuJoCo model and set task parameters."""
 
+        self.HAND_MODEL_NAME = "leap_rh_mjx"
         self.FINGER_TIPS_NAMES = ["if_tip", "mf_tip", "rf_tip", "th_tip"]
         super().__init__(name,
                          xml_path=xml_path,
@@ -80,8 +81,9 @@ class ScrewDriverRotateTask(Task):
         self.screw_driver_orientation_from_target_sensor = self.get_sensor_id("screw_driver_orientation_from_target")
         self.screw_driver_linear_velocity_sensor = self.get_sensor_id("screw_driver_linear_vel")
         self.screw_driver_angular_velocity_sensor = self.get_sensor_id("screw_driver_angular_vel")
-        self.screw_driver_head_distance_to_target_head_sensor = self.get_sensor_id(
-            "screw_driver_head_distance_to_target_head_a")
+        self.screw_driver_head_distance_to_target_heads_sensors = [
+            self.get_sensor_id("screw_driver_head_distance_to_target_head_a"),
+            self.get_sensor_id("screw_driver_head_distance_to_target_head_b")]
         self.finger_tip_distance_to_screw_driver_sensors = [self.get_sensor_id(f"{finger_tip}_distance_to_screw_driver")
                                                             for finger_tip in self.FINGER_TIPS_NAMES]
 
@@ -154,9 +156,11 @@ class ScrewDriverRotateTask(Task):
             jnp.square(
                 jnp.array([self.get_sensor_data(data, s) for s in self.finger_tip_distance_to_screw_driver_sensors])))
 
-    def _get_screw_driver_head_distance_to_target_head(self, data: mjx.Data) -> jax.Array:
-        """Position of the screw_driver head relative to the target head."""
-        return self.get_sensor_data(data, self.screw_driver_head_distance_to_target_head_sensor)
+    def _get_screw_driver_head_distance_to_target_heads(self, data: mjx.Data) -> jax.Array:
+        """Position of the screw_driver head relative to the target heads"""
+        return jnp.sum(
+            jnp.square(jnp.array([self.get_sensor_data(data, sensor)
+                                  for sensor in self.screw_driver_head_distance_to_target_heads_sensors])))
 
     # Palm cost
     def _get_palm_cost(self, state: mjx.Data, encourage: bool) -> jax.Array:
@@ -183,7 +187,7 @@ class ScrewDriverRotateTask(Task):
         reaching_cost = 100 * jnp.maximum(
             squared_distance - self.grasp_threshold ** 2, 0.0
         )
-        head_cost = 10000 * self._get_screw_driver_head_distance_to_target_head(data)
+        head_cost = 0  # 10000 * self._get_screw_driver_head_distance_to_target_heads(data) # Only for bringing/relocating
         position_cost = 0.1 * squared_distance + reaching_cost + head_cost
         orientation_cost = 5000000 * self._get_screw_driver_orientation_distance_to_target(data)
         grasp_cost = 0.001 * jnp.sum(jnp.square(control))  # + self._get_fingertips_cost(data)

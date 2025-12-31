@@ -69,6 +69,7 @@ class SamplingBasedController(ABC):
     def __init__(
             self,
             task: Task,
+            num_samples: int,
             num_randomizations: int,
             risk_strategy: RiskStrategy,
             seed: int,
@@ -82,6 +83,7 @@ class SamplingBasedController(ABC):
 
         Args:
             task: The task instance defining the dynamics and costs.
+            num_samples: The number of rollouts to sample
             num_randomizations: The number of domain randomizations to use.
             risk_strategy: How to combining costs from different randomizations.
             seed: The random seed for domain randomization.
@@ -93,6 +95,8 @@ class SamplingBasedController(ABC):
         """
         self.task = task
         self.num_ctrls = task.num_ctrls
+        self.num_samples = num_samples
+        task.num_samples = num_samples
         self.num_randomizations = max(num_randomizations, 1)
         self.ctrl_callback = ctrl_callback
 

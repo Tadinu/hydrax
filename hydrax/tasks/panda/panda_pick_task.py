@@ -3,18 +3,18 @@ Adapted from: https://github.com/google-deepmind/mujoco_playground
 """
 
 from typing import Any, Dict, Optional, Union, Tuple
-
-from etils import epath
 from functools import partial
+from etils import epath
+import numpy as np
 
+# jax
 import jax
-import jax.numpy as jnp
 from jax import jit
+import jax.numpy as jnp
 from ml_collections import config_dict
-import mujoco as mj
+# import mujoco as mj
 from mujoco import mjx
 from mujoco.mjx._src import math
-import numpy as np
 
 # mujoco playground
 from mujoco_playground._src import mjx_env
@@ -28,6 +28,7 @@ from hydrax import ROOT
 from mjmanip.robot.arm_hand import ArmHandDiffIK
 from mjmanip.robot.arm_hand_mjx import ArmHandDiffIKMjx
 from mjmanip.robot.panda_leap_mjx import PandaLeapMjx
+from mjmanip.control.fabrics.fabrics.arm_hand_pose_fabric import ArmHandPoseFabricConfig
 
 
 class PandaPickEnv(PandaLeapEnv):
@@ -64,26 +65,29 @@ class PandaPickEnv(PandaLeapEnv):
                  xml_path: Optional[epath.Path] = None,
                  obj_name: Optional[str] = None,
                  keyframe: Optional[str] = None,
+                 fabric_cfg: Optional[ArmHandPoseFabricConfig] = None,
                  sample_orientation: bool = False,
                  use_ctrl_callback: bool = False,
                  warp_enabled: bool = False):
         if xml_path is None:
-            xml_path = epath.Path(ROOT) / "models" / "panda" / "mjx_panda_leap_single_cube.xml"
+            xml_path = epath.Path(ROOT) / "models" / "panda" / (
+                "mjx_panda_leap_single_obj_fabric.xml" if fabric_cfg else "mjx_panda_leap_single_cube.xml")
         super().__init__(name, config, config_overrides,
                          xml_path=xml_path,
                          obj_name=obj_name,
                          keyframe=keyframe,
+                         fabric_cfg=fabric_cfg,
                          use_ctrl_callback=use_ctrl_callback,
                          warp_enabled=warp_enabled)
         self._sample_orientation = sample_orientation
-        self.ctrl_callback = self.mjx_convert_free_hand_to_full_arm_hand_ctrl
+        self.ctrl_callback = self.mjx_fabrics_convert_free_hand_to_full_arm_hand_ctrl if fabric_cfg \
+            else self.mjx_convert_free_hand_to_full_arm_hand_ctrl
         self._init_ik()
 
         # Hand joint ids
         self.hand_joints = jnp.array([self.mj_model.joint(joint).id for joint in self.HAND_JOINTS])
 
         # Sensor ids
-        self.obj_position_sensor = self.get_sensor_id(f"{self._obj_name}_position")
         self.obj_contact_with_palm_sensor = self.get_sensor_id(f"{self._obj_name}_contact_with_palm")
         self.obj_distance_to_grasp_sensor = self.get_sensor_id(f"{self._obj_name}_distance_to_grasp")
         self.obj_contact_with_finger_tip_sensors = {
@@ -97,7 +101,6 @@ class PandaPickEnv(PandaLeapEnv):
         self.obj_distance_to_finger_palm_sensors = [self.get_sensor_id(f"{self._obj_name}_distance_to_{finger_palm}")
                                                     for finger_palm in self.FINGER_PALMS_NAMES]
         self.obj_distance_to_target_sensor = self.get_sensor_id(f"{self._obj_name}_distance_to_target")
-        self.obj_orientation_sensor = self.get_sensor_id(f"{self._obj_name}_orientation")
         self.obj_orientation_from_target_sensor = self.get_sensor_id(f"{self._obj_name}_orientation_from_target")
         self.obj_linear_velocity_sensor = self.get_sensor_id(f"{self._obj_name}_linear_vel")
         self.obj_angular_velocity_sensor = self.get_sensor_id(f"{self._obj_name}_angular_vel")
@@ -118,7 +121,7 @@ class PandaPickEnv(PandaLeapEnv):
         self.target_distance_threshold = 0.001
 
     def _init_ik(self) -> None:
-        PandaLeapMjx.HAND_MODEL_NAME = "leap_rh"
+        PandaLeapMjx.HAND_MODEL_NAME = "leap_rh_mjx"
         PandaLeapMjx.NBATCHES = 1
         PandaLeapMjx.init_class_default()
         use_diff_ik_mjx = False
@@ -282,10 +285,6 @@ class PandaPickEnv(PandaLeapEnv):
         }
         return rewards
 
-    def _get_obj_position(self, data: mjx.Data) -> jax.Array:
-        """Position of the obj in world frame."""
-        return self.get_sensor_data(data, self.obj_position_sensor)
-
     def _get_obj_contact_with_palm(self, data: mjx.Data) -> jax.Array:
         """Num of obj contacts with palm"""
         # [found: 0 or num_contacts]
@@ -310,10 +309,6 @@ class PandaPickEnv(PandaLeapEnv):
     def _get_obj_distance_to_target(self, data: mjx.Data) -> jax.Array:
         """Position of the obj relative to the target."""
         return self.get_sensor_data(data, self.obj_distance_to_target_sensor)
-
-    def _get_obj_orientation(self, data: mjx.Data) -> jax.Array:
-        """Orientation of the obj in world frame."""
-        return self.get_sensor_data(data, self.obj_orientation_sensor)
 
     def _get_obj_orientation_distance_to_target(self, data: mjx.Data) -> jax.Array:
         """Orientation of the obj relative to the target grasp orientation."""
@@ -489,35 +484,6 @@ class PandaPickEnv(PandaLeapEnv):
             data.ctrl - data.qpos[self._robot_qposadr[:-1]],
         ])
         return obs
-
-    @partial(jit, static_argnums=(0,))
-    def mjx_integrate_pos(self, qpos: jnp.ndarray, qvel: jnp.ndarray, dt: float) -> jnp.ndarray:
-        return mjx._src.forward._integrate_pos(self.mjx_model.jnt_type, qpos, qvel, dt)
-
-    @partial(jit, static_argnums=(0,))
-    def mjx_convert_free_hand_to_full_arm_hand_ctrl(self, mjx_data: mjx.Data, u: jnp.ndarray) -> jnp.ndarray:
-        hand_ctrl = u[6:]
-        grasp_site_ctrl = u[:6]
-        full_ctrl = None
-        if True:
-            jacp, jacr = mjx.jac(self.mjx_model, mjx_data,
-                                 mjx_data.site_xpos[self._grasp_site].ravel(),
-                                 self.mjx_model.site_bodyid[self._grasp_site])
-            J = jnp.vstack([jacp.T, jacr.T])  # (6, nv)
-
-            # damped least-squares solve: qvel = J^T (J J^T + λ^2 I)^-1 v
-            damp = 0.01  # λ
-            diag = (damp ** 2) * jnp.eye(6)
-            JJt = J @ J.T
-            full_ctrl = J.T @ jnp.linalg.solve(JJt + diag, grasp_site_ctrl)
-            full_ctrl = self.mjx_integrate_pos(mjx_data.qpos.copy(), full_ctrl.copy(), self.mj_model.opt.timestep)
-            full_ctrl = full_ctrl.at[7:23].set(hand_ctrl)
-            full_ctrl = full_ctrl[:23]
-        else:
-            hand_base_pose = f(grasp_site_ctrl)
-            self.diff_ik_mjx.last_solved_q = self.diff_ik_mjx.solve(hand_base_pose)
-            full_ctrl = self.diff_ik_mjx.last_solved_q
-        return full_ctrl
 
 
 class PandaPickObjectOrientationEnv(PandaPickEnv):

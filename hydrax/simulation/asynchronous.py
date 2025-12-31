@@ -237,7 +237,7 @@ def run_simulator(
             if ctrl.ctrl_callback:
                 mj_data.ctrl[7:] = shm_data.hand_ctrl[:]
                 mj_data.ctrl[:7] = ArmHandDiffIK.dls_ik(mj_model, mj_data, shm_data.wrist_ctrl[:],
-                                                        grasp_site_name="leap_rh/grasp_site",
+                                                        grasp_site_name=f"{ctrl.task.HAND_MODEL_NAME}/grasp_site",
                                                         dt=mj_model.opt.timestep)
             else:
                 mj_data.ctrl[:] = shm_data.ctrl[:]

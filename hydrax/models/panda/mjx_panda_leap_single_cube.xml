@@ -11,7 +11,8 @@
   <!-- Sensors for the cube -->
   <sensor>
     <framepos name="cube_position" objtype="body" objname="cube"/>
-    <framepos name="cube_distance_to_grasp" objtype="body" objname="cube" reftype="site" refname="leap_rh/grasp_site" />
+    <framepos name="cube_distance_to_grasp" objtype="body" objname="cube" reftype="site"
+              refname="leap_rh_mjx/grasp_site"/>
     <framepos name="cube_distance_to_target" objtype="body" objname="cube" reftype="body" refname="target"/>
     <framequat name="cube_orientation" objtype="body" objname="cube"/>
     <framequat name="cube_orientation_from_target" objtype="body" objname="cube" reftype="body" refname="target"/>
@@ -19,11 +20,11 @@
     <frameangvel name="cube_angular_vel" objtype="body" objname="cube"/>
 
     <!-- hand. -->
-    <framepos name="palm_position" objtype="site" objname="leap_rh/grasp_site"/>
-    <framepos name="th_tip_distance_to_cube" objtype="site" objname="leap_rh/th_tip" reftype="body" refname="cube"/>
-    <framepos name="if_tip_distance_to_cube" objtype="site" objname="leap_rh/if_tip" reftype="body" refname="cube"/>
-    <framepos name="mf_tip_distance_to_cube" objtype="site" objname="leap_rh/mf_tip" reftype="body" refname="cube"/>
-    <framepos name="rf_tip_distance_to_cube" objtype="site" objname="leap_rh/rf_tip" reftype="body" refname="cube"/>
+    <framepos name="palm_position" objtype="site" objname="leap_rh_mjx/grasp_site"/>
+    <framepos name="th_tip_distance_to_cube" objtype="site" objname="leap_rh_mjx/th_tip" reftype="body" refname="cube"/>
+    <framepos name="if_tip_distance_to_cube" objtype="site" objname="leap_rh_mjx/if_tip" reftype="body" refname="cube"/>
+    <framepos name="mf_tip_distance_to_cube" objtype="site" objname="leap_rh_mjx/mf_tip" reftype="body" refname="cube"/>
+    <framepos name="rf_tip_distance_to_cube" objtype="site" objname="leap_rh_mjx/rf_tip" reftype="body" refname="cube"/>
 
   </sensor>
 </mujoco>

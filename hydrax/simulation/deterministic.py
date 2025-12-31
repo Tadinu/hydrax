@@ -173,7 +173,7 @@ def run_interactive(  # noqa: PLR0912, PLR0915
                 mj_model, ref_data, vopt, pert, catmask, viewer.user_scn
             )
 
-        grasp_site_name = "leap_rh/grasp_site"
+        grasp_site_name = f"{controller.task.HAND_MODEL_NAME}/grasp_site"
         obj = mj_data.body(controller.task._obj_name)
         IDENTITY_WXYZ = np.array([1., 0., 0., 0.])
         while viewer.is_running():

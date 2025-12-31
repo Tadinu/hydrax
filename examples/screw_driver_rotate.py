@@ -14,7 +14,7 @@ Double click on the floating target, then change the goal orientation with [ctrl
 """
 
 # Define the task (cost and dynamics)
-task = ScrewDriverRotateTask(name="Screw Driver Rotation", warp_enabled=False)
+task = ScrewDriverRotateTask(name="Screw Driver Rotation", warp_enabled=True)
 
 # Parse command-line arguments
 parser = argparse.ArgumentParser(
