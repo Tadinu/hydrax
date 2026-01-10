@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 from functools import partial
-from typing import Any, Callable, Literal, Tuple, Optional
+from typing import Any, Callable, Literal, Tuple, Optional, Union
 
 import numpy as np
+import warp as wp
 
 import jax
 import jax.numpy as jnp
@@ -10,6 +11,7 @@ from flax.struct import dataclass
 
 import mujoco as mj
 from mujoco import mjx
+import mujoco_warp as mjw
 
 from hydrax.risk import AverageCost, RiskStrategy
 from hydrax.task_base import Task
@@ -63,6 +65,12 @@ class SamplingParams:
     rng: jax.Array
 
 
+@wp.kernel
+def wp_default_mjw_ctrl_callback(ins: wp.array(dtype=float, ndim=2),
+                                 outs: wp.array(dtype=float, ndim=2)):
+    pass
+
+
 class SamplingBasedController(ABC):
     """An abstract sampling-based MPC algorithm interface."""
 
@@ -96,9 +104,7 @@ class SamplingBasedController(ABC):
         self.task = task
         self.num_ctrls = task.num_ctrls
         self.num_samples = num_samples
-        task.num_samples = num_samples
         self.num_randomizations = max(num_randomizations, 1)
-        self.ctrl_callback = ctrl_callback
 
         # Risk strategy defaults to average cost
         if risk_strategy is None:
@@ -118,9 +124,30 @@ class SamplingBasedController(ABC):
         self.num_knots = num_knots
         self.interp_func = get_interp_func(spline_type)
 
+        # MJ-JAX
         # Use a single model (no domain randomization) by default
         self.mjx_model = task.mjx_model
-        self.randomized_axes = None
+        self.mjx_randomized_model_template: mjx.Model = None
+
+        # MJ-WARP
+        self.mjw_model = task.mjw_model
+        task.mjw_init_data(num_samples)
+        self.mjw_rollout_graph = None
+        self.mjw_rollout_initial_model: mjw.Model = None
+        self.mjw_rollout_initial_state: mjw.Data = self.task.mjw_data
+        self.mjw_rollout_control_inputs: wp.array(dtype=float) = wp.zeros(
+            (self.num_samples, self.ctrl_steps, self.num_ctrls)) if self.mjw_model \
+            else None
+        self.mjw_rollout_control_outputs: wp.array(dtype=float) = wp.zeros(
+            (self.num_samples, self.ctrl_steps, self.mjw_model.nu)) if self.mjw_model \
+            else None
+        self.mjw_substeps_num = 1
+        self.mjw_costs = jnp.zeros((self.num_samples, self.ctrl_steps))
+        self.mjw_trace_sites = jnp.zeros((self.num_samples, self.ctrl_steps, 1, 3))
+        self.mjw_base_poses = jnp.zeros((self.num_samples, self.ctrl_steps, 7))
+
+        # Control Callback
+        self.ctrl_callback = ctrl_callback if self.mjx_model else wp_default_mjw_ctrl_callback
 
         # Number of optimization iterations
         if iterations < 1:
@@ -129,22 +156,30 @@ class SamplingBasedController(ABC):
         self.iterations = iterations
 
         if self.num_randomizations > 1:
-            # Make domain randomized models
-            rng = jax.random.key(seed)
-            rng, subrng = jax.random.split(rng)
-            subrngs = jax.random.split(subrng, num_randomizations)
-            randomizations = jax.vmap(self.task.domain_randomize_model)(subrngs)
-            self.mjx_model = self.task.mjx_model.tree_replace(randomizations)
-            # Keep track of which elements of the model have randomization
-            self.randomized_axes = jax.tree.map(lambda x: None, self.task.mjx_model)
-            self.randomized_axes = self.randomized_axes.tree_replace(
-                {key: 0 for key in randomizations.keys()}
-            )
+            if self.mjx_model:
+                # Make domain randomized models
+                rng = jax.random.key(seed)
+                rng, subrng = jax.random.split(rng)
+                subrngs = jax.random.split(subrng, num_randomizations)
+                randomizations: dict[str, jax.Array] = jax.vmap(self.task.domain_randomize_model)(subrngs)
+                self.mjx_model = self.task.mjx_model.tree_replace(randomizations)
+                # Keep track of which elements of the model have randomization
+                self.mjx_randomized_model_template: mjx.Model = jax.tree.map(lambda x: None,
+                                                                             self.task.mjx_model).tree_replace(
+                    {key: 0 for key in randomizations.keys()}
+                )
+            else:
+                randomizations = self.task.wp_domain_randomize_model(kernel_seed=seed)
+                # Ref: https://mujoco.readthedocs.io/en/latest/mjwarp/index.html#batched-model-fields
+                self.mjw_rollout_initial_model = self.task.mjw_model
+                for field, value in randomizations.items():
+                    wp.copy(getattr(self.mjw_rollout_initial_model, field), wp.from_jax(value))
+                self.mjw_capture_rollout()
 
-    def step_callback(self, state: mjx.Data):
+    def step_callback(self, state: Union[mjx.Data, mjw.Data]):
         self.task.step_callback(state)
 
-    def optimize(self, state: mjx.Data, params: Any) -> Tuple[Any, Trajectory]:
+    def optimize(self, state: Union[mjx.Data, mjw.Data], params: Any) -> Tuple[Any, Trajectory]:
         """Perform an optimization step to update the policy parameters.
 
         Args:
@@ -159,7 +194,8 @@ class SamplingBasedController(ABC):
         # the mean knots by evaluating the old spline at those times
         tk = params.tk
         new_tk = (
-                jnp.linspace(0.0, self.plan_horizon, self.num_knots) + state.time
+                jnp.linspace(0.0, self.plan_horizon, self.num_knots) +
+                (state.time if isinstance(state, mjx.Data) else wp.to_jax(state.time)[0])
         )
 
         # Clamp query times to the old spline's domain to avoid extrapolation,
@@ -169,7 +205,7 @@ class SamplingBasedController(ABC):
         new_mean = self.interp_func(clamped_tk, tk, params.mean[None, ...])[0] 
         params = params.replace(tk=new_tk, mean=new_mean)
 
-        def _optimize_scan_body(params: Any, iteration: Any):
+        def _optimize_scan_body(params: Any, iteration: Any) -> tuple[Any, Trajectory]:
             # Sample random control sequences from spline knots
             knots, params = self.sample_knots(params)
             knots = jnp.clip(
@@ -189,9 +225,13 @@ class SamplingBasedController(ABC):
 
             return params, rollouts
 
-        params, rollouts = jax.lax.scan(
-            f=_optimize_scan_body, init=params, xs=jnp.arange(self.iterations)
-        )
+        if isinstance(state, mjx.Data):
+            params, rollouts = jax.lax.scan(
+                f=_optimize_scan_body, init=params, xs=jnp.arange(self.iterations)
+            )
+        else:
+            for _ in range(self.iterations):
+                params, rollouts = _optimize_scan_body(params, iteration=_)
 
         rollouts_final = jax.tree.map(lambda x: x[-1], rollouts)
 
@@ -199,7 +239,7 @@ class SamplingBasedController(ABC):
 
     def rollout_with_randomizations(
             self,
-            state: mjx.Data,
+            initial_state: Union[mjx.Data, mjw.Data],
             tk: jax.Array,
             knots: jax.Array,
             rng: jax.Array,
@@ -207,7 +247,7 @@ class SamplingBasedController(ABC):
         """Compute rollout costs, applying domain randomizations.
 
         Args:
-            state: The initial state x₀.
+            initial_state: The initial state x₀.
             tk: The knot times of the control spline, (num_knots,).
             knots: The control spline knots, (num rollouts, num_knots, nu).
             rng: The random number generator key for randomizing initial states.
@@ -217,17 +257,21 @@ class SamplingBasedController(ABC):
             Costs are aggregated over domains using the given risk strategy.
         """
         # Set the initial state for each rollout.
-        states = jax.vmap(lambda _, x: x, in_axes=(0, None))(
-            jnp.arange(self.num_randomizations), state
-        )
+        # (self.num_randomizations, initial_state.shape)
+        mjx_initial_states = jax.vmap(lambda _, x: x, in_axes=(0, None))(
+            jnp.arange(self.num_randomizations), initial_state
+        ) if self.mjx_model else None
 
         if self.num_randomizations > 1:
-            # Randomize the initial states for each domain randomization
-            subrngs = jax.random.split(rng, self.num_randomizations)
-            randomizations = jax.vmap(self.task.domain_randomize_data)(
-                states, subrngs
-            )
-            states = states.tree_replace(randomizations)
+            if self.mjx_model:
+                # Randomize the initial states for each domain randomization
+                subrngs = jax.random.split(rng, self.num_randomizations)
+                randomizations: dict[str, jax.Array] = jax.vmap(self.task.domain_randomize_data)(
+                    mjx_initial_states, subrngs
+                )
+                mjx_initial_states = mjx_initial_states.tree_replace(randomizations)
+            else:
+                randomizations: dict[str, jax.Array] = self.task.wp_domain_randomize_data(0)
 
         # Compute the control sequence from the knots
         tq = jnp.linspace(tk[0], tk[-1], self.ctrl_steps)
@@ -235,9 +279,15 @@ class SamplingBasedController(ABC):
 
         # Apply the control sequences, parallelized over both rollouts and
         # domain randomizations.
-        _, rollouts = jax.vmap(
-            self.eval_rollouts, in_axes=(self.randomized_axes, 0, None, None)
-        )(self.mjx_model, states, controls, knots)
+        if self.mjx_model:
+            _, rollouts = jax.vmap(
+                self.eval_rollouts, in_axes=(self.mjx_randomized_model_template, 0, None, None)
+            )(self.mjx_model, mjx_initial_states, controls, knots)
+        else:
+            # Ref: https://mujoco.readthedocs.io/en/latest/mjwarp/index.html#batched-model-fields
+            for field, value in randomizations.items():
+                wp.copy(getattr(initial_state, field), wp.from_jax(value))
+            rollouts = self.wp_eval_rollouts(initial_state, controls, knots)
 
         # Combine the costs from different domain randomizations using the
         # specified risk strategy.
@@ -275,7 +325,8 @@ class SamplingBasedController(ABC):
             A Trajectory object containing the control, costs, and trace sites.
         """
 
-        def _scan_fn(x: mjx.Data, u: jax.Array) -> Tuple[mjx.Data, Tuple[mjx.Data, jax.Array, jax.Array, jax.Array]]:
+        def _scan_fn(x: Union[mjx.Data, mjw.Data], u: jax.Array) -> Tuple[
+            mjx.Data, Tuple[mjx.Data, jax.Array, jax.Array, jax.Array]]:
             """Compute the cost and observation, then advance the state."""
 
             def valid_cb(args):
@@ -296,7 +347,7 @@ class SamplingBasedController(ABC):
                 data = mjx.step(model, data)
                 return data, None
 
-            x = jax.lax.scan(single_step, x, (), n_substeps)[0]
+            x = jax.lax.scan(single_step, x, (), n_substeps)[0]  # 0 for data
             cost = self.dt * self.task.running_cost(x, ctrl)
             sites = self.task.get_trace_sites(x)
             base_pose = self.task.get_base_pose(x)
@@ -322,6 +373,87 @@ class SamplingBasedController(ABC):
             costs=costs,
             trace_sites=trace_sites,
             base_poses=base_poses
+        )
+
+    def mjw_capture_rollout(self):
+
+        @wp.kernel
+        def wp_kernel_copy_controls(src_ctrls: wp.array(dtype=float, ndim=2),
+                                    dest_ctrls: wp.array(dtype=float, ndim=3),
+                                    idx: int):
+            i, j = wp.tid()
+
+            # write into 3D array:
+            # axis order assumed: [batch, slice, feature]
+            dest_ctrls[i, idx, j] = src_ctrls[i, j]
+
+        with wp.ScopedCapture() as capture:
+            """Compute the cost and observation, then advance the state."""
+            mjw_model = self.mjw_rollout_initial_model
+            mjw_data = self.mjw_rollout_initial_state
+            for _ in range(self.ctrl_steps):
+                wp_ctrl_in = self.mjw_rollout_control_inputs[:, _, :]
+                valid_cb = wp.ones(1, dtype=wp.int32) if self.ctrl_callback is not None else wp.zeros(0, dtype=wp.int32)
+                wp_ctrl_out = wp.zeros((self.num_samples, mjw_model.nu),
+                                       dtype=wp.float32) if self.ctrl_callback is not None else wp_ctrl_in
+                wp.capture_if(valid_cb,
+                              wp.launch(self.ctrl_callback, dim=len(wp_ctrl_in),
+                                        inputs=[wp_ctrl_in],
+                                        outputs=[wp_ctrl_out]))
+
+                for i in range(self.mjw_substeps_num):
+                    mjw_data.ctrl.assign(wp_ctrl_out)
+                    mjw.forward(mjw_model, mjw_data)
+
+                wp.launch(
+                    wp_kernel_copy_controls,
+                    dim=(self.num_samples, mjw_model.nu),
+                    inputs=[wp_ctrl_out,
+                            self.mjw_rollout_control_outputs,
+                            _],
+                    device=wp_ctrl_out.device
+                )
+        self.mjw_rollout_graph = capture.graph
+
+    def wp_eval_rollouts(self,
+                         initial_state: mjw.Data,
+                         controls: jax.Array,
+                         knots: jax.Array) -> Trajectory:
+        """Rollout control sequences (in parallel) and compute the costs.
+
+        Args:
+            controls: The control sequences, (num rollouts, H, nu).
+            knots: The control spline knots, (num rollouts, num_knots, nu).
+        Returns:
+            The states (stacked) experienced during the rollouts.
+            A Trajectory object containing the control, costs, and trace sites.
+        """
+        self.mjw_rollout_initial_state = initial_state
+        self.mjw_rollout_control_inputs = wp.from_jax(controls)
+        wp.capture_launch(self.mjw_rollout_graph)
+        for batch_idx in range(self.num_samples):
+            self.mjw_trace_sites = jnp.concatenate([self.mjw_trace_sites,
+                                                    jnp.tile(
+                                                        self.task.get_trace_sites(self.mjw_rollout_initial_state,
+                                                                                  batch_idx)
+                                                        [None, None, ...],
+                                                        (self.num_samples, self.ctrl_steps, 1, 1))],
+                                                   axis=2)
+            for step_idx in range(self.ctrl_steps):
+                wp_ctrl = wp.clone(self.mjw_rollout_control_outputs[batch_idx, step_idx])
+                self.mjw_costs.at[batch_idx, step_idx].set(
+                    self.dt * self.task.running_cost(self.mjw_rollout_initial_state,
+                                                     wp.to_jax(wp_ctrl),
+                                                     batch_idx=batch_idx))
+                self.mjw_base_poses.at[batch_idx, step_idx].set(self.task.get_base_pose(self.mjw_rollout_initial_state,
+                                                                                        batch_idx))
+
+        return Trajectory(
+            controls=controls,
+            knots=knots,
+            costs=self.mjw_costs,
+            trace_sites=self.mjw_trace_sites,
+            base_poses=self.mjw_base_poses
         )
 
     def init_params(

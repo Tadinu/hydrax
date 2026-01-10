@@ -26,6 +26,7 @@ import jax.numpy as jp
 from ml_collections import config_dict
 import mujoco as mj
 from mujoco import mjx
+import mujoco_warp as mjw
 import numpy as np
 
 # mujoco playground
@@ -33,7 +34,7 @@ from mujoco_playground._src import collision
 from mujoco_playground._src import mjx_env
 
 # hydrax
-from hydrax import ROOT
+from hydrax import ROOT, BackendType
 from hydrax.tasks.panda import panda_kinematics
 from hydrax.tasks.panda.panda_base_env import PandaBaseEnv
 from hydrax.tasks.panda.panda_pick_env import PandaPickEnv
@@ -377,7 +378,7 @@ class PandaPickCubeCartesian(PandaPickEnv):
             info=state.info,
         )
 
-    def _get_success(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
+    def _get_success(self, data: Union[mjx.Data, mjw.Data], info: dict[str, Any]) -> jax.Array:
         box_pos = data.xpos[self._obj_body]
         target_pos = info['target_pos']
         if (

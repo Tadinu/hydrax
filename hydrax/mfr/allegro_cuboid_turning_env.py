@@ -10,7 +10,7 @@ from etils import epath
 import torch
 
 # hydrax
-from hydrax import ROOT
+from hydrax import ROOT, BackendType
 from hydrax.mfr.allegro_env import AllegroManipEnv, AllegroManipEnvCfg, euler_xyz_from_quat
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -61,10 +61,10 @@ class AllegroCuboidTurningCfg(AllegroManipEnvCfg):
 
 class AllegroCuboidTurningEnv(AllegroManipEnv):
     def __init__(self, name: str, task_cfg: dict,
-                 warp_enabled: bool = False):
+                 backend_type: BackendType = BackendType.MJX):
         super().__init__(name, task_cfg,
                          cfg=AllegroCuboidTurningCfg(fingers=task_cfg['fingers']),
-                         warp_enabled=warp_enabled)
+                         backend_type=backend_type)
 
         # target yaw we want to achieve (per-env) — the task: rotate cuboid to this yaw
         self.target_yaw = torch.zeros((1,), device=self.device)

@@ -1,4 +1,5 @@
 import os
+import enum
 from pathlib import Path
 
 import jax
@@ -23,6 +24,28 @@ os.environ["XLA_FLAGS"] = "--xla_gpu_triton_gemm_any=true "
 jax.config.update("jax_compilation_cache_dir", f"{ROOT}/.tmp/jax_cache")
 
 
+class BackendType(enum.IntEnum):
+    MJX = enum.auto()
+    MJX_WARP = enum.auto()
+    MJW = enum.auto()
+
+
+# Declare globally devices
+if "CUDA_VISIBLE_DEVICES" in os.environ:
+    print("Hydrax CUDA_VISIBLE_DEVICES:", os.environ["CUDA_VISIBLE_DEVICES"])
+HYDRAX_DEVICE_INT = 0
+HYDRAX_DEVICE = f"cuda:{HYDRAX_DEVICE_INT}"
+
+# Torch
+import torch
+
+torch.set_default_device(HYDRAX_DEVICE)
+a = torch.zeros(4, device=HYDRAX_DEVICE)
+torch.set_printoptions(precision=4)
+print("HYDRAX", a)
+
+
+# Set the warp cache directory based on device int
 def initialize_warp(warp_cache_name):
     """
     Explicitly setting the directory for codegen and compilation. Need this for multi-gpu settings.
@@ -39,17 +62,4 @@ def initialize_warp(warp_cache_name):
     # wp.build.clear_kernel_cache()
 
 
-# Torch
-import torch
-
-# Declare device for fabric
-HYDRAX_DEVICE_INT = 0
-HYDRAX_DEVICE = f"cuda:{str(HYDRAX_DEVICE_INT)}"
-
-# To allow using this torch instance
-a = torch.zeros(4, device=HYDRAX_DEVICE)
-# Reduce print precision
-torch.set_printoptions(precision=4)
-
-# Set the warp cache directory based on device int
 initialize_warp(str(HYDRAX_DEVICE_INT))

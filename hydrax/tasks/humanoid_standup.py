@@ -1,11 +1,12 @@
-from typing import Dict
+from typing import Dict, Union
 
 import jax
 import jax.numpy as jnp
 import mujoco as mj
 from mujoco import mjx
+import mujoco_warp as mjw
 
-from hydrax import ROOT
+from hydrax import ROOT, BackendType
 from hydrax.task_base import Task
 
 
@@ -32,18 +33,19 @@ class HumanoidStandup(Task):
         # Standing configuration
         self.qstand = jnp.array(mj_model.keyframe("stand").qpos)
 
-    def _get_torso_height(self, state: mjx.Data) -> jax.Array:
+    def _get_torso_height(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Get the height of the torso above the ground."""
         return state.site_xpos[self.torso_id, 2]
 
-    def _get_torso_orientation(self, state: mjx.Data) -> jax.Array:
+    def _get_torso_orientation(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Get the rotation from the current torso orientation to upright."""
         sensor_adr = self.mjx_model.sensor_adr[self.orientation_sensor_id]
         quat = state.sensordata[sensor_adr: sensor_adr + 4]
         upright = jnp.array([0.0, 0.0, 1.0])
         return mjx._src.math.rotate(upright, quat)
 
-    def running_cost(self, state: mjx.Data, control: jax.Array) -> jax.Array:
+    def running_cost(self, state: Union[mjx.Data, mjw.Data], control: jax.Array,
+                     batch_idx: Optional[int] = -1) -> jax.Array:
         """The running cost ℓ(xₜ, uₜ)."""
         orientation_cost = jnp.sum(
             jnp.square(self._get_torso_orientation(state))
@@ -54,7 +56,7 @@ class HumanoidStandup(Task):
         nominal_cost = jnp.sum(jnp.square(state.qpos[7:] - self.qstand[7:]))
         return 10.0 * orientation_cost + 10.0 * height_cost + 0.1 * nominal_cost
 
-    def terminal_cost(self, state: mjx.Data) -> jax.Array:
+    def terminal_cost(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """The terminal cost ϕ(x_T)."""
         return self.running_cost(state, jnp.zeros(self.mjx_model.nu))
 
@@ -68,7 +70,7 @@ class HumanoidStandup(Task):
         return {"geom_friction": new_frictions}
 
     def domain_randomize_data(
-            self, data: mjx.Data, rng: jax.Array
+            self, data: Union[mjx.Data, mjw.Data], rng: jax.Array
     ) -> Dict[str, jax.Array]:
         """Randomly perturb the measured base position and velocities."""
         rng, q_rng, v_rng = jax.random.split(rng, 3)

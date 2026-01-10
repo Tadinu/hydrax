@@ -68,7 +68,7 @@ class AllegroCuboidAlignment(AllegroValveTurning):
                  arm_stiffness=None,
                  finger_stiffness=None,
                  collision_checking=True,
-                 device='cuda:0', **kwargs):
+                 device=HYDRAX_DEVICE, **kwargs):
         self.fingers = fingers
         self.num_fingers = len(fingers)
         self.object_asset_pos = object_asset_pos

@@ -4,12 +4,14 @@ from typing import Sequence
 
 import jax
 import jax.numpy as jnp
+import warp as wp
 import mujoco as mj
 import mujoco.viewer
 import numpy as np
+import mujoco_warp as mjw
 
 # hydrax
-from hydrax import ROOT
+from hydrax import ROOT, BackendType
 from hydrax.alg_base import SamplingBasedController
 from hydrax.utils.video import VideoRecorder
 
@@ -85,30 +87,38 @@ def run_interactive(  # noqa: PLR0912, PLR0915
 
     # Create a data structure for the controller to run rollouts from.
     mjx_data = controller.task.make_data()
-    mjx_data = mjx_data.replace(
+    mjw_data = None
+    if backend_type == BackendType.MJX_WARP:
+    else:
+        mjw_data = mjw.put_data(mj_model, mj_data, nworld=controller.num_samples, njmax=300)
+
+    if mjx_data:
+        mjx_data = mjx_data.replace(
         qpos=mj_data.qpos,
         qvel=mj_data.qvel,
         mocap_pos=mj_data.mocap_pos,
         mocap_quat=mj_data.mocap_quat,
-    )
-
-    # Initialize the controller
+        )
+    else:
+        mjw_data.mocap_pos.assign(wp.array(mj_data.mocap_pos))
+        mjw_data.mocap_quat.assign(wp.array(mj_data.mocap_quat))
     policy_params = controller.init_params(initial_knots=initial_knots)
-    jit_optimize = jax.jit(controller.optimize)
+    jit_optimize = jax.jit(controller.optimize) if mjx_data else controller.optimize
     jit_interp_func = jax.jit(controller.interp_func)
 
     # Warm-up the controller
     print("Jitting the controller...")
-    st = time.time()
-    policy_params, rollouts = jit_optimize(mjx_data, policy_params)
-    policy_params, rollouts = jit_optimize(mjx_data, policy_params)
+    jit_start = time.time()
+    state = mjx_data if mjx_data else mjw_data
+    policy_params, rollouts = jit_optimize(state, policy_params)
+    policy_params, rollouts = jit_optimize(state, policy_params)
 
     tq = jnp.arange(0, sim_steps_per_replan) * mj_model.opt.timestep
     tk = policy_params.tk
     knots = policy_params.mean[None, ...]
     _ = jit_interp_func(tq, tk, knots)
     _ = jit_interp_func(tq, tk, knots)
-    print(f"Time to jit: {time.time() - st:.3f} seconds")
+    print(f"Time to jit: {time.time() - jit_start:.3f} seconds")
     num_traces = min(rollouts.controls.shape[1], max_traces)
 
     # Ghost reference setup
@@ -136,6 +146,7 @@ def run_interactive(  # noqa: PLR0912, PLR0915
             fps=actual_frequency,
         )
         # Ensure model visual offscreen buffer is compatible with video
+        start_recording_time = time.time()
         # recording
         mj_model.vis.global_.offwidth = width
         mj_model.vis.global_.offheight = height
@@ -265,6 +276,12 @@ def run_interactive(  # noqa: PLR0912, PLR0915
                 f"Realtime rate: {rtr:.2f}, plan time: {plan_time:.4f}s",
                 end="\r",
             )
+
+            if record_video:
+                recorded_time = time.time() - start_recording_time
+                print(f"Recording time: {recorded_time:.2f}s")
+                if recorded_time > 1000:
+                    break
 
     # Preserve the last printout
     print("")

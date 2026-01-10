@@ -3,18 +3,20 @@ from enum import IntEnum
 from etils import epath
 
 import numpy as np
+import warp as wp
 import jax
 import jax.numpy as jnp
 
 # mujoco
 import mujoco as mj
 from mujoco import mjx
+import mujoco_warp as mjw
 
 # mujoco playground
 from mujoco_playground._src import mjx_env
 
 # hydrax
-from hydrax import ROOT
+from hydrax import ROOT, BackendType
 from hydrax.task_base import Task
 
 # mjmanip
@@ -51,7 +53,7 @@ class CubeRelocateTask(Task):
         mjx_env.update_assets(assets, path / "reorientation_cube_textures")
         return assets
 
-    def __init__(self, name: str, warp_enabled: bool = False) -> None:
+    def __init__(self, name: str, backend_type: BackendType = BackendType.MJX) -> None:
         """Load the MuJoCo model and set task parameters."""
 
         self.HAND_MODEL_NAME = "leap_rh_mjx"
@@ -60,7 +62,7 @@ class CubeRelocateTask(Task):
                          xml_path=epath.Path(ROOT) / "models" / "leap_hand" / "scene_leap_rh_mjx_relocate_cube.xml",
                          obj_name="cube",
                          trace_sites=["grasp_site"] + self.FINGER_TIPS_NAMES,
-                         warp_enabled=warp_enabled)
+                         backend_type=backend_type)
 
         # Move [base_body]
         base_body = self.mj_model.body("leap_mount")
@@ -109,38 +111,38 @@ class CubeRelocateTask(Task):
             HAND_HOME_QPOS + self._init_obj_qpos.tolist() if self._obj_name else HAND_HOME_QPOS
         )
 
-    def _get_cube_position(self, data: mjx.Data) -> jax.Array:
+    def _get_cube_position(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Position of the cube in world frame."""
         return self.get_sensor_data(data, self.cube_position_sensor)
 
-    def _get_cube_contact_with_palm(self, data: mjx.Data) -> jax.Array:
+    def _get_cube_contact_with_palm(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Num of cube contacts with palm"""
         # [found: 0 or num_contacts]
         return self.get_sensor_data(data, self.cube_contact_with_palm_sensor, end=1)
 
-    def _get_obj_contact_with_finger_tips(self, data: mjx.Data) -> jax.Array:
+    def _get_obj_contact_with_finger_tips(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         # Each return [found: 0 or num_contacts]
         return jnp.sum(jnp.array(
             [self.get_sensor_data(data, self.obj_contact_with_finger_tip_sensors[f], end=1) for f in
              self.FINGER_TIPS_NAMES]))
 
-    def _get_obj_contact_force_with_finger_tips(self, data: mjx.Data) -> jax.Array:
+    def _get_obj_contact_force_with_finger_tips(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         return jnp.sum(jnp.square(jnp.array([self.get_sensor_data(data, self.obj_contact_with_finger_tip_sensors[f],
                                                                   start=1, end=4) for f in self.FINGER_TIPS_NAMES])))
 
-    def _get_cube_distance_to_grasp(self, data: mjx.Data) -> jax.Array:
+    def _get_cube_distance_to_grasp(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Position of the cube relative to the grasp."""
         return self.get_sensor_data(data, self.cube_distance_to_grasp_sensor)
 
-    def _get_cube_distance_to_target(self, data: mjx.Data) -> jax.Array:
+    def _get_cube_distance_to_target(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Position of the cube relative to the target."""
         return self.get_sensor_data(data, self.cube_distance_to_target_sensor)
 
-    def _get_cube_orientation(self, data: mjx.Data) -> jax.Array:
+    def _get_cube_orientation(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Orientation of the cube in world frame."""
         return self.get_sensor_data(data, self.cube_orientation_sensor)
 
-    def _get_cube_orientation_distance_to_target(self, data: mjx.Data) -> jax.Array:
+    def _get_cube_orientation_distance_to_target(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Orientation of the cube relative to the target grasp orientation."""
         cube_relative_to_target_quat = self.get_sensor_data(data, self.cube_orientation_from_target_sensor)
 
@@ -148,21 +150,21 @@ class CubeRelocateTask(Task):
         goal_relative_quat = jnp.array([1.0, 0.0, 0.0, 0.0])
         return jnp.sum(jnp.square(mjx._src.math.quat_sub(cube_relative_to_target_quat, goal_relative_quat)))
 
-    def _get_cube_linear_velocity(self, data: mjx.Data) -> jax.Array:
+    def _get_cube_linear_velocity(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Velocity of the cube in world."""
         return self.get_sensor_data(data, self.cube_linear_velocity_sensor)
 
-    def _get_finger_tips_distance_to_cube(self, data: mjx.Data) -> jax.Array:
+    def _get_finger_tips_distance_to_cube(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Distance of the fingertips from the object."""
         return jnp.sum(
             jnp.square(jnp.array([self.get_sensor_data(data, s) for s in self.finger_tip_distance_to_cube_sensors])))
 
     # Palm cost
-    def _get_palm_cost(self, state: mjx.Data, encourage: bool) -> jax.Array:
+    def _get_palm_cost(self, state: Union[mjx.Data, mjw.Data], encourage: bool) -> jax.Array:
         return (-1 if encourage else 1) * 0.05 * self._get_cube_contact_with_palm(state)
 
     # Fingertips total cost
-    def _get_fingertips_cost(self, state: mjx.Data) -> jax.Array:
+    def _get_fingertips_cost(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         # cost = 50 * self._get_finger_tips_distance_to_obj(state)
         cost = -0.05 * self._get_obj_contact_with_finger_tips(state)
         return cost
@@ -173,21 +175,21 @@ class CubeRelocateTask(Task):
         mask = jax.nn.sigmoid((eps - err) * steep)
         return mask * (1.0 / x) ** 2
 
-    def is_reaching(self, state: mjx.Data) -> Any:
+    def is_reaching(self, state: Union[mjx.Data, mjw.Data]) -> Any:
         return self.phase == RelocatePhase.REACHING and not self.is_in_object_proximity(state)
 
-    def is_in_object_proximity(self, state: mjx.Data) -> Any:
+    def is_in_object_proximity(self, state: Union[mjx.Data, mjw.Data]) -> Any:
         grasp_position_err = self._get_cube_distance_to_grasp(state)
         grasp_squared_distance = jnp.sum(jnp.square(grasp_position_err[0:2]))
         # [0:2]ignore z since it can never be fully close to 0 spatially (3D)
         return grasp_squared_distance > self.grasp_threshold ** 2
 
-    def is_relocating(self, state: mjx.Data) -> Any:
+    def is_relocating(self, state: Union[mjx.Data, mjw.Data]) -> Any:
         target_distance_err = self._get_cube_distance_to_target(state)
         target_squared_distance = jnp.sum(jnp.square(target_distance_err))
         return (~self.is_reaching(state)) & (target_squared_distance > self.grasp_threshold ** 2)
 
-    def next_phase(self, state: mjx.Data) -> jnp.int32:
+    def next_phase(self, state: Union[mjx.Data, mjw.Data]) -> jnp.int32:
         is_near_object = jnp.any(self.is_in_object_proximity(state))
         phase = state.userdata[0].astype(jnp.int32)
         return jax.lax.select(phase == RelocatePhase.INITIAL, RelocatePhase.REACHING,
@@ -209,7 +211,7 @@ class CubeRelocateTask(Task):
             right_value
         )
 
-    def grasp_position_cost(self, data: mjx.Data, control: jax.Array) -> jax.Array:
+    def grasp_position_cost(self, data: Union[mjx.Data, mjw.Data], control: jax.Array) -> jax.Array:
         grasp_position_err = self._get_cube_distance_to_grasp(data)
         grasp_squared_distance = jnp.sum(jnp.square(grasp_position_err[0:2]))
         # [0:2]ignore z since it can never be fully close to 0 spatially (3D)
@@ -221,7 +223,7 @@ class CubeRelocateTask(Task):
         grasp_control_cost = k_grasp * jnp.sum(jnp.square(control))
         return grasp_position_cost + grasp_orientation_cost + grasp_control_cost
 
-    def bring_to_target_cost(self, data: mjx.Data, control: jax.Array) -> jax.Array:
+    def bring_to_target_cost(self, data: Union[mjx.Data, mjw.Data], control: jax.Array) -> jax.Array:
         fingers_squared_distance = self._get_finger_tips_distance_to_cube(data)
         fingers_distance_cost = 10000 * fingers_squared_distance
 
@@ -237,21 +239,22 @@ class CubeRelocateTask(Task):
         # )
         return target_distance_cost + fingers_distance_cost
 
-    def running_cost(self, data: mjx.Data, control: jax.Array) -> jax.Array:
+    def running_cost(self, state: Union[mjx.Data, mjw.Data], control: jax.Array,
+                     batch_idx: Optional[int] = -1) -> jax.Array:
         """The running cost ℓ(xₜ, uₜ)."""
-        position_err = self._get_cube_distance_to_grasp(data)
+        position_err = self._get_cube_distance_to_grasp(state)
         squared_distance = jnp.sum(jnp.square(position_err[0:2]))  # ignore z
         # Only highly weighed until reaching certain threshold, from which prioritize other costs (orientation, grasp, etc.)
         reaching_cost = 100 * jnp.maximum(
             squared_distance - self.grasp_threshold ** 2, 0.0
         )
         position_cost = 0.1 * squared_distance + reaching_cost
-        orientation_cost = 50 * self._get_cube_orientation_distance_to_target(data)
+        orientation_cost = 50 * self._get_cube_orientation_distance_to_target(state)
 
-        grasp_cost = 0.001 * jnp.sum(jnp.square(control)) + self._get_fingertips_cost(data)
+        grasp_cost = 0.001 * jnp.sum(jnp.square(control)) + self._get_fingertips_cost(state)
         return position_cost + orientation_cost + grasp_cost
 
-    def running_relocate_cost(self, data: mjx.Data, control: jax.Array) -> jax.Array:
+    def running_relocate_cost(self, data: Union[mjx.Data, mjw.Data], control: jax.Array) -> jax.Array:
         """The running cost ℓ(xₜ, uₜ)."""
         phase = data.userdata[0].astype(jnp.int32)
         return jax.lax.select((phase == RelocatePhase.REACHING) | (phase == RelocatePhase.GRASPING),
@@ -260,12 +263,12 @@ class CubeRelocateTask(Task):
                                              self.bring_to_target_cost(data, control),
                                              jnp.array([100000000.0], dtype=jnp.float32)))
 
-    def terminal_cost(self, data: mjx.Data) -> jax.Array:
+    def terminal_cost(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """The terminal cost ϕ(x_T)."""
         position_err = self._get_cube_distance_to_grasp(data)
         return 100 * jnp.sum(jnp.square(position_err)) + self._get_fingertips_cost(data)
 
-    def terminal_relocate_cost(self, data: mjx.Data) -> Union[jax.Array, Any]:
+    def terminal_relocate_cost(self, data: Union[mjx.Data, mjw.Data]) -> Union[jax.Array, Any]:
         """The terminal cost ϕ(x_T)."""
         phase = data.userdata[0].astype(jnp.int32)
         grasp_distance_cost = 100 * jnp.sum(jnp.square(self._get_cube_distance_to_grasp(data)))
@@ -277,16 +280,53 @@ class CubeRelocateTask(Task):
 
     def domain_randomize_model(self, rng: jax.Array) -> Dict[str, jax.Array]:
         """Randomize the friction parameters."""
-        n_geoms = self.mjx_model.geom_friction.shape[0]
-        multiplier = jax.random.uniform(rng, (n_geoms,), minval=0.5, maxval=2.0)
-        new_frictions = self.mjx_model.geom_friction.at[:, 0].set(
-            self.mjx_model.geom_friction[:, 0] * multiplier
-        )
-        return {"geom_friction": new_frictions}
+        if self.mjx_model:
+            geom_friction = self.mjx_model.geom_friction
+            n_geoms = geom_friction.shape[0]
+            multiplier = jax.random.uniform(rng, (n_geoms,), minval=0.5, maxval=2.0)
+            new_geom_friction = geom_friction.at[:, 0].set(
+                geom_friction[:, 0] * multiplier
+            )
+        return {"geom_friction": new_geom_friction}
 
-    def domain_randomize_data(
-            self, data: mjx.Data, rng: jax.Array
-    ) -> Dict[str, jax.Array]:
+    def wp_domain_randomize_model(self, kernel_seed: int) -> Dict[str, jax.Array]:
+        @wp.kernel
+        def wp_scale_geom_friction(kernel_seed: wp.int32,
+                                   geom_friction: wp.array(dtype=wp.vec3f, ndim=2),
+                                   scaled_geom_friction: wp.array(dtype=wp.vec3f, ndim=2)):
+            i = wp.tid()
+            scaled_geom_friction[i, 0] = geom_friction[i, 0] * wp.randf(wp.rand_init(kernel_seed), 0.5, 2.0)
+
+        geom_friction = self.mjw_model.geom_friction
+        n_geoms = len(geom_friction)
+
+        new_geom_friction = wp.clone(geom_friction)
+        wp.launch(wp_scale_geom_friction,
+                  dim=n_geoms,
+                  inputs=[kernel_seed, geom_friction],
+                  outputs=[new_geom_friction])
+        return {"geom_friction": wp.to_jax(new_geom_friction)}
+
+    def domain_randomize_data(self, data: Union[mjx.Data, mjw.Data], rng: jax.Array) -> Dict[str, jax.Array]:
         """Randomly shift the measured configurations."""
         shift = 0.005 * jax.random.normal(rng, (self.mjx_model.nq,))
         return {"qpos": data.qpos + shift}
+
+    def wp_domain_randomize_data(self, kernel_seed: int) -> Dict[str, jax.Array]:
+        """Randomly shift the measured configurations."""
+
+        @wp.kernel
+        def wp_randomize_qpos(kernel_seed: wp.uint32,
+                              qpos: wp.array(dtype=float, ndim=2),
+                              rand_qpos: wp.array(dtype=float, ndim=2)):
+            i = wp.tid()
+            for j in range(len(qpos[i])):
+                rand_qpos[i, j] = qpos[i, j] + 0.005 * wp.randn(kernel_seed)
+
+        qpos = self.mjw_data.qpos
+        rand_qpos = wp.clone(self.mjw_data.qpos)
+        wp.launch(wp_randomize_qpos,
+                  dim=len(rand_qpos),
+                  inputs=[kernel_seed, qpos],
+                  outputs=[rand_qpos])
+        return {"qpos": wp.to_jax(rand_qpos)}

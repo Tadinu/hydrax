@@ -4,7 +4,7 @@ Adopted from https://github.com/alberthli/mujoco_mpc/blob/leap-hardware/mjpc/tas
 -->
 
 <mujoco model="leap_rh">
-  <compiler angle="radian" assetdir="assets"/>
+  <compiler angle="radian" meshdir="assets"/>
   <option timestep="0.01"
           integrator="implicitfast"
           impratio="0.1"

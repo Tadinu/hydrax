@@ -1,8 +1,10 @@
 import argparse
 
 import mujoco as mj
-
 from evosax.algorithms.distribution_based import Sep_CMA_ES
+
+# hydrax
+from hydrax import BackendType
 from hydrax.algs import CEM, ICEM, MPPI, Evosax, PredictiveSampling
 from hydrax.simulation.deterministic import run_interactive
 from hydrax.tasks.screw_driver_rotate_task import ScrewDriverRotateTask
@@ -14,7 +16,7 @@ Double click on the floating target, then change the goal orientation with [ctrl
 """
 
 # Define the task (cost and dynamics)
-task = ScrewDriverRotateTask(name="Screw Driver Rotation", warp_enabled=True)
+task = ScrewDriverRotateTask(name="Screw Driver Rotation", backend_type=BackendType.MJX_WARP)
 
 # Parse command-line arguments
 parser = argparse.ArgumentParser(

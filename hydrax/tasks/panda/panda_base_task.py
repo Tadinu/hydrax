@@ -24,6 +24,7 @@ import jax.numpy as jp
 from ml_collections import config_dict
 import mujoco as mj
 from mujoco import mjx
+import mujoco_warp as mjw
 import numpy as np
 
 # mujoco playground
@@ -31,7 +32,7 @@ from mujoco_playground._src import mjx_env
 
 # hydrax
 from hydrax.task_base import Task
-from hydrax import ROOT
+from hydrax import ROOT, BackendType
 
 
 class PandaBaseEnv(mjx_env.MjxEnv, Task):
@@ -63,7 +64,7 @@ class PandaBaseEnv(mjx_env.MjxEnv, Task):
                  keyframe: Optional[str] = None,
                  trace_sites: Optional[Sequence[str]] = None,
                  use_ctrl_callback: bool = False,
-                 warp_enabled: bool = False):
+                 backend_type: BackendType = BackendType.MJX):
         super().__init__(config, config_overrides)
         if obj_name is None:
             obj_name = "cube"  # Required for creating model spec
@@ -85,7 +86,7 @@ class PandaBaseEnv(mjx_env.MjxEnv, Task):
         self._action_scale = config.action_scale
         Task.__init__(self, name=name, xml_path=xml_path, sim_dt=config.sim_dt,
                       obj_name=obj_name, keyframe=keyframe, trace_sites=trace_sites,
-                      warp_enabled=warp_enabled)
+                      backend_type=backend_type)
 
     def _post_init(self) -> None:
         # 1- Init [u_min, u_max]
@@ -192,7 +193,7 @@ class PandaBaseEnv(mjx_env.MjxEnv, Task):
         )
         return {"geom_friction": new_frictions}
 
-    def domain_randomize_data(self, data: mjx.Data, rng: jax.Array) -> Dict[str, jax.Array]:
+    def domain_randomize_data(self, data: Union[mjx.Data, mjw.Data], rng: jax.Array) -> Dict[str, jax.Array]:
         """Randomly shift the measured configurations."""
         if True:
             """Add noise to the state estimate."""

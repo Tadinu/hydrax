@@ -7,6 +7,7 @@ import jax
 import jax.numpy as jnp
 from flax.struct import dataclass
 from mujoco import mjx
+import mujoco_warp as mjw
 
 from hydrax.algs.cem import CEM, CEMParams
 from hydrax.alg_base import SamplingBasedController, SamplingParams, Trajectory
@@ -149,7 +150,7 @@ class ICEM(CEM):
         elite_knots = jnp.concatenate([rollouts.knots[elites],
                                        params.last_rollout_knots[
                                            params.last_elites[
-                                           :int(len(params.last_elites) * self.fraction_elites_reused)]]])
+                                               :int(len(params.last_elites) * self.fraction_elites_reused)]]])
         mean = jnp.mean(elite_knots, axis=0)
         cov = jnp.maximum(
             jnp.std(elite_knots, axis=0), self.sigma_min

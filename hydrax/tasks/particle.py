@@ -1,11 +1,12 @@
-from typing import Dict
+from typing import Dict, Union, Optional
 
 import jax
 import jax.numpy as jnp
 import mujoco as mj
 from mujoco import mjx
+import mujoco_warp as mjw
 
-from hydrax import ROOT
+from hydrax import ROOT, BackendType
 from hydrax.task_base import Task
 
 
@@ -20,13 +21,14 @@ class Particle(Task):
         super().__init__(mj_model, trace_sites=["pointmass"], impl=impl)
         self.pointmass_id = mj_model.site("pointmass").id
 
-    def running_cost(self, state: mjx.Data, control: jax.Array) -> jax.Array:
+    def running_cost(self, state: Union[mjx.Data, mjw.Data], control: jax.Array,
+                     batch_idx: Optional[int] = -1) -> jax.Array:
         """The running cost ℓ(xₜ, uₜ) encourages target tracking."""
         state_cost = self.terminal_cost(state)
         control_cost = jnp.sum(jnp.square(control))
         return state_cost + 0.1 * control_cost
 
-    def terminal_cost(self, state: mjx.Data) -> jax.Array:
+    def terminal_cost(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """The terminal cost ϕ(x_T)."""
         position_cost = jnp.sum(
             jnp.square(state.site_xpos[self.pointmass_id] - state.mocap_pos[0])
@@ -44,7 +46,7 @@ class Particle(Task):
         return {"actuator_gainprm": new_gains}
 
     def domain_randomize_data(
-            self, data: mjx.Data, rng: jax.Array
+            self, data: Union[mjx.Data, mjw.Data], rng: jax.Array
     ) -> Dict[str, jax.Array]:
         """Randomly shift the measured particle position."""
         shift = jax.random.uniform(rng, (2,), minval=-0.01, maxval=0.01)

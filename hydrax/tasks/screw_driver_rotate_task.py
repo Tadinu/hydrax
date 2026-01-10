@@ -8,12 +8,13 @@ import jax.numpy as jnp
 # mujoco
 import mujoco as mj
 from mujoco import mjx
+import mujoco_warp as mjw
 
 # mujoco playground
 from mujoco_playground._src import mjx_env
 
 # hydrax
-from hydrax import ROOT
+from hydrax import ROOT, BackendType
 from hydrax.task_base import Task
 
 # mjmanip
@@ -47,7 +48,7 @@ class ScrewDriverRotateTask(Task):
         mjx_env.update_assets(assets, path / "reorientation_cube_textures")
         return assets
 
-    def __init__(self, name: str, warp_enabled: bool = False,
+    def __init__(self, name: str, backend_type: BackendType = BackendType.MJX,
                  xml_path=epath.Path(
                      ROOT) / "models" / "leap_hand" / "scene_leap_rh_mjx_rotate_screw_driver.xml") -> None:
         """Load the MuJoCo model and set task parameters."""
@@ -58,7 +59,7 @@ class ScrewDriverRotateTask(Task):
                          xml_path=xml_path,
                          obj_name="screw_driver",
                          trace_sites=["grasp_site"] + self.FINGER_TIPS_NAMES,
-                         warp_enabled=warp_enabled)
+                         backend_type=backend_type)
 
         # Move [base_body]
         base_body = self.mj_model.body(self.BASE_BODY_NAME)
@@ -106,38 +107,38 @@ class ScrewDriverRotateTask(Task):
             HAND_HOME_QPOS + self._init_obj_qpos.tolist() if self._obj_name else HAND_HOME_QPOS
         )
 
-    def _get_screw_driver_position(self, data: mjx.Data) -> jax.Array:
+    def _get_screw_driver_position(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Position of the screw_driver in world frame."""
         return self.get_sensor_data(data, self.screw_driver_position_sensor)
 
-    def _get_screw_driver_contact_with_palm(self, data: mjx.Data) -> jax.Array:
+    def _get_screw_driver_contact_with_palm(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Num of screw_driver contacts with palm"""
         # [found: 0 or num_contacts]
         return self.get_sensor_data(data, self.screw_driver_contact_with_palm_sensor, end=1)
 
-    def _get_obj_contact_with_finger_tips(self, data: mjx.Data) -> jax.Array:
+    def _get_obj_contact_with_finger_tips(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         # Each return [found: 0 or num_contacts]
         return jnp.sum(jnp.array(
             [self.get_sensor_data(data, self.obj_contact_with_finger_tip_sensors[f], end=1) for f in
              self.FINGER_TIPS_NAMES]))
 
-    def _get_obj_contact_force_with_finger_tips(self, data: mjx.Data) -> jax.Array:
+    def _get_obj_contact_force_with_finger_tips(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         return jnp.sum(jnp.square(jnp.array([self.get_sensor_data(data, self.obj_contact_with_finger_tip_sensors[f],
                                                                   start=1, end=4) for f in self.FINGER_TIPS_NAMES])))
 
-    def _get_screw_driver_distance_to_grasp(self, data: mjx.Data) -> jax.Array:
+    def _get_screw_driver_distance_to_grasp(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Position of the screw_driver relative to the grasp."""
         return self.get_sensor_data(data, self.screw_driver_distance_to_grasp_sensor)
 
-    def _get_screw_driver_distance_to_target(self, data: mjx.Data) -> jax.Array:
+    def _get_screw_driver_distance_to_target(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Position of the screw_driver relative to the target."""
         return self.get_sensor_data(data, self.screw_driver_distance_to_target_sensor)
 
-    def _get_screw_driver_orientation(self, data: mjx.Data) -> jax.Array:
+    def _get_screw_driver_orientation(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Orientation of the screw_driver in world frame."""
         return self.get_sensor_data(data, self.screw_driver_orientation_sensor)
 
-    def _get_screw_driver_orientation_distance_to_target(self, data: mjx.Data) -> jax.Array:
+    def _get_screw_driver_orientation_distance_to_target(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Orientation of the screw_driver relative to the target grasp orientation."""
         screw_driver_relative_to_target_quat = self.get_sensor_data(data,
                                                                     self.screw_driver_orientation_from_target_sensor)
@@ -146,28 +147,28 @@ class ScrewDriverRotateTask(Task):
         goal_relative_quat = jnp.array([1.0, 0.0, 0.0, 0.0])
         return jnp.sum(jnp.square(mjx._src.math.quat_sub(screw_driver_relative_to_target_quat, goal_relative_quat)))
 
-    def _get_screw_driver_linear_velocity(self, data: mjx.Data) -> jax.Array:
+    def _get_screw_driver_linear_velocity(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Velocity of the screw_driver in world."""
         return self.get_sensor_data(data, self.screw_driver_linear_velocity_sensor)
 
-    def _get_finger_tips_distance_to_screw_driver(self, data: mjx.Data) -> jax.Array:
+    def _get_finger_tips_distance_to_screw_driver(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Distance of the fingertips from the object."""
         return jnp.sum(
             jnp.square(
                 jnp.array([self.get_sensor_data(data, s) for s in self.finger_tip_distance_to_screw_driver_sensors])))
 
-    def _get_screw_driver_head_distance_to_target_heads(self, data: mjx.Data) -> jax.Array:
+    def _get_screw_driver_head_distance_to_target_heads(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Position of the screw_driver head relative to the target heads"""
         return jnp.sum(
             jnp.square(jnp.array([self.get_sensor_data(data, sensor)
                                   for sensor in self.screw_driver_head_distance_to_target_heads_sensors])))
 
     # Palm cost
-    def _get_palm_cost(self, state: mjx.Data, encourage: bool) -> jax.Array:
+    def _get_palm_cost(self, state: Union[mjx.Data, mjw.Data], encourage: bool) -> jax.Array:
         return (-1 if encourage else 1) * 0.05 * self._get_screw_driver_contact_with_palm(state)
 
     # Fingertips total cost
-    def _get_fingertips_cost(self, state: mjx.Data) -> jax.Array:
+    def _get_fingertips_cost(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         # cost = 50 * self._get_finger_tips_distance_to_obj(state)
         cost = -0.01 * self._get_obj_contact_with_finger_tips(state)
         return cost
@@ -181,21 +182,22 @@ class ScrewDriverRotateTask(Task):
             right_value
         )
 
-    def running_cost(self, data: mjx.Data, control: jax.Array) -> jax.Array:
+    def running_cost(self, state: Union[mjx.Data, mjw.Data], control: jax.Array,
+                     batch_idx: Optional[int] = -1) -> jax.Array:
         """The running cost ℓ(xₜ, uₜ)."""
-        squared_distance = self._get_finger_tips_distance_to_screw_driver(data)
+        squared_distance = self._get_finger_tips_distance_to_screw_driver(state)
         reaching_cost = 100 * jnp.maximum(
             squared_distance - self.grasp_threshold ** 2, 0.0
         )
         head_cost = 0  # 10000 * self._get_screw_driver_head_distance_to_target_heads(data) # Only for bringing/relocating
         position_cost = 0.1 * squared_distance + reaching_cost + head_cost
-        orientation_cost = 5000000 * self._get_screw_driver_orientation_distance_to_target(data)
+        orientation_cost = 5000000 * self._get_screw_driver_orientation_distance_to_target(state)
         grasp_cost = 0.001 * jnp.sum(jnp.square(control))  # + self._get_fingertips_cost(data)
         return position_cost + orientation_cost + grasp_cost
 
-    def terminal_cost(self, data: mjx.Data) -> jax.Array:
+    def terminal_cost(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """The terminal cost ϕ(x_T)."""
-        return self.running_cost(data, jnp.zeros(1))
+        return self.running_cost(state, jnp.zeros(1))
 
     def domain_randomize_model(self, rng: jax.Array) -> Dict[str, jax.Array]:
         """Randomize the friction parameters."""
@@ -207,7 +209,7 @@ class ScrewDriverRotateTask(Task):
         return {"geom_friction": new_frictions}
 
     def domain_randomize_data(
-            self, data: mjx.Data, rng: jax.Array
+            self, data: Union[mjx.Data, mjw.Data], rng: jax.Array
     ) -> Dict[str, jax.Array]:
         """Randomly shift the measured configurations."""
         if True:

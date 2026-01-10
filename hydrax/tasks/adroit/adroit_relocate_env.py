@@ -22,6 +22,7 @@ import jax
 import jax.numpy as jp
 import mujoco as mj
 from mujoco import mjx
+import mujoco_warp as mjw
 
 # mujoco playground
 from mujoco_playground._src import collision
@@ -30,7 +31,7 @@ from mujoco_playground._src.mjx_env import State
 
 # hydrax
 from hydrax.task_base import Task
-from hydrax import ROOT
+from hydrax import ROOT, BackendType
 
 DEFAULT_CAMERA_CONFIG = {
     "distance": 1.5,
@@ -345,37 +346,38 @@ class AdroitHandRelocateEnv(mjx_env.MjxEnv, Task):
     def action_size(self) -> int:
         return self.mjx_model.nu
 
-    def _get_obj_position_err(self, state: mjx.Data) -> jax.Array:
+    def _get_obj_position_err(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Position of the obj relative to the target grasp position."""
         sensor_adr = self.mjx_model.sensor_adr[self.obj_position_sensor]
         return state.sensordata[sensor_adr: sensor_adr + 3]
 
-    def _get_obj_orientation_err(self, state: mjx.Data) -> jax.Array:
+    def _get_obj_orientation_err(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Orientation of the obj relative to the target grasp orientation."""
         sensor_adr = self.mjx_model.sensor_adr[self.obj_orientation_sensor]
         return state.sensordata[sensor_adr: sensor_adr + 4]
 
-    def running_cost(self, data: mjx.Data, control: jax.Array) -> jax.Array:
+    def running_cost(self, state: Union[mjx.Data, mjw.Data], control: jax.Array,
+                     batch_idx: Optional[int] = -1) -> jax.Array:
         """The running cost ℓ(xₜ, uₜ)."""
-        position_err = self._get_obj_position_err(data)
+        position_err = self._get_obj_position_err(state)
         squared_distance = jp.sum(jp.square(position_err[0:2]))  # ignore z
         position_cost = 0.1 * squared_distance + 100 * jp.maximum(
             squared_distance - self.delta ** 2, 0.0
         )
 
-        orientation_err = self._get_obj_orientation_err(data)
+        orientation_err = self._get_obj_orientation_err(state)
         orientation_cost = jp.sum(jp.square(orientation_err))
 
         grasp_cost = 0.001 * jp.sum(jp.square(control))
 
         return position_cost + orientation_cost + grasp_cost
 
-    def terminal_cost(self, data: mjx.Data) -> jax.Array:
+    def terminal_cost(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """The terminal cost ϕ(x_T)."""
         position_err = self._get_obj_position_err(data)
         return 100 * jp.sum(jp.square(position_err))
 
-    def _get_obs(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
+    def _get_obs(self, data: Union[mjx.Data, mjw.Data], info: dict[str, Any]) -> jax.Array:
         # qpos for hand
         # xpos for obj
         # xpos for target
@@ -439,7 +441,7 @@ class AdroitHandRelocateEnv(mjx_env.MjxEnv, Task):
 
         return state
 
-    def _get_reward(self, data: mjx.Data, info: Dict[str, Any]) -> Dict[str, Any]:
+    def _get_reward(self, data: Union[mjx.Data, mjw.Data], info: Dict[str, Any]) -> Dict[str, Any]:
         target_pos = info["target_pos"]
         box_pos = data.xpos[self._obj_body]
         grasp_pos = data.site_xpos[self._grasp_site]

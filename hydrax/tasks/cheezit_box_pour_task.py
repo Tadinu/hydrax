@@ -8,12 +8,13 @@ import jax.numpy as jnp
 # mujoco
 import mujoco as mj
 from mujoco import mjx
+import mujoco_warp as mjw
 
 # mujoco playground
 from mujoco_playground._src import mjx_env
 
 # hydrax
-from hydrax import ROOT
+from hydrax import ROOT, BackendType
 from hydrax.task_base import Task
 
 # mjmanip
@@ -35,13 +36,13 @@ class CheezitBoxPouringTask(Task):
         mjx_env.update_assets(assets, path, "*.obj")
         return assets
 
-    def __init__(self, name: str, warp_enabled: bool = False) -> None:
+    def __init__(self, name: str, backend_type: BackendType = BackendType.MJX) -> None:
         """Load the MuJoCo model and set task parameters."""
 
         super().__init__(name,
                          xml_path=epath.Path(ROOT) / "models" / "cheezit_box" / "scene_cheezit_box_pour_grains.xml",
                          obj_name="cheezit_box",
-                         warp_enabled=warp_enabled)
+                         backend_type=backend_type)
 
         # Move [cheezit_box]
         cheezit_box = self.mj_model.body("cheezit_box")
@@ -66,27 +67,27 @@ class CheezitBoxPouringTask(Task):
         # return np.concatenate([IDENTITY_POSE, np.tile(IDENTITY_POSE, 180)]) # 180 grains
         return IDENTITY_POSE
 
-    def _get_cheezit_box_position(self, data: mjx.Data) -> jax.Array:
+    def _get_cheezit_box_position(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Position of the cheezit_box in world frame."""
         return self.get_sensor_data(data, self.cheezit_box_position_sensor)
 
-    def _get_cheezit_box_orientation(self, data: mjx.Data) -> jax.Array:
+    def _get_cheezit_box_orientation(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Orientation of the cheezit_box in world frame."""
         return self.get_sensor_data(data, self.cheezit_box_orientation_sensor)
 
-    def _get_cheezit_box_linear_velocity(self, data: mjx.Data) -> jax.Array:
+    def _get_cheezit_box_linear_velocity(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Linear Velocity of the cheezit_box in world."""
         return self.get_sensor_data(data, self.cheezit_box_linear_velocity_sensor)
 
-    def _get_cheezit_box_angular_velocity(self, data: mjx.Data) -> jax.Array:
+    def _get_cheezit_box_angular_velocity(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Angular Velocity of the cheezit_box in world."""
         return self.get_sensor_data(data, self.cheezit_box_angular_velocity_sensor)
 
-    def _get_cheezit_box_distance_to_target(self, data: mjx.Data) -> jax.Array:
+    def _get_cheezit_box_distance_to_target(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Position of the cheezit_box relative to the target."""
         return self.get_sensor_data(data, self.cheezit_box_distance_to_target_sensor)
 
-    def _get_cheezit_box_orientation_from_target(self, data: mjx.Data) -> jax.Array:
+    def _get_cheezit_box_orientation_from_target(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Orientation of the cheezit_box relative to the target."""
         return self.get_sensor_data(data, self.cheezit_box_orientation_from_target_sensor)
 
@@ -99,10 +100,11 @@ class CheezitBoxPouringTask(Task):
             right_value
         )
 
-    def running_cost(self, data: mjx.Data, control: jax.Array) -> jax.Array:
+    def running_cost(self, state: Union[mjx.Data, mjw.Data], control: jax.Array,
+                     batch_idx: Optional[int] = -1) -> jax.Array:
         """The running cost ℓ(xₜ, uₜ)."""
         # Position error
-        position_err = self._get_cheezit_box_distance_to_target(data)
+        position_err = self._get_cheezit_box_distance_to_target(state)
         squared_distance = jnp.sum(jnp.square(position_err))
         reaching_cost = 100 * jnp.maximum(
             squared_distance - self.position_distance_threshold ** 2, 0.0
@@ -110,16 +112,16 @@ class CheezitBoxPouringTask(Task):
         position_cost = 0.1 * squared_distance + reaching_cost
 
         # Orientation error
-        orientation_err = self._get_cheezit_box_orientation_from_target(data)
+        orientation_err = self._get_cheezit_box_orientation_from_target(state)
         squared_distance = jnp.sum(jnp.square(orientation_err))
         orientation_cost = 50 * jnp.maximum(
             squared_distance - self.orientation_distance_threshold ** 2, 0.0
         )
         return position_cost + orientation_cost
 
-    def terminal_cost(self, data: mjx.Data) -> jax.Array:
+    def terminal_cost(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """The terminal cost ϕ(x_T)."""
-        return self.running_cost(data, None)
+        return self.running_cost(state, None)
 
     def domain_randomize_model(self, rng: jax.Array) -> Dict[str, jax.Array]:
         """Randomize the friction parameters."""
@@ -131,7 +133,7 @@ class CheezitBoxPouringTask(Task):
         return {"geom_friction": new_frictions}
 
     def domain_randomize_data(
-            self, data: mjx.Data, rng: jax.Array
+            self, data: Union[mjx.Data, mjw.Data], rng: jax.Array
     ) -> Dict[str, jax.Array]:
         """Randomly shift the measured configurations."""
         if True:

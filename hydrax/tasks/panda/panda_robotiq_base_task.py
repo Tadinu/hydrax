@@ -22,13 +22,14 @@ from etils import epath
 from ml_collections import config_dict
 import mujoco as mj
 from mujoco import mjx
+import mujoco_warp as mjw
 import numpy as np
 
 # mujoco playground
 from mujoco_playground._src import mjx_env
 
 # hydrax
-from hydrax import ROOT
+from hydrax import ROOT, BackendType
 from hydrax.tasks.panda.panda_base_env import PandaBaseEnv
 
 GRIPPER_GEOMS = [

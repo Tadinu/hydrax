@@ -5,9 +5,10 @@ from omegaconf import DictConfig, OmegaConf
 
 # MuJoCo
 import mujoco as mj
-
 from evosax.algorithms.distribution_based import Sep_CMA_ES
-from hydrax import ROOT
+
+# hydrax
+from hydrax import ROOT, BackendType
 from hydrax.algs import CEM, ICEM, MPPI, Evosax, PredictiveSampling
 from hydrax.simulation.asynchronous import run_interactive as async_run_interactive
 from hydrax.simulation.deterministic import run_interactive as sync_run_interactive
@@ -37,7 +38,7 @@ fabric_cfg = None
 def fetch_fabric_config(cfg: DictConfig) -> None:
     global fabric_cfg
     fabric_cfg = OmegaConf.to_object(cfg)
-    assert type(fabric_cfg) == ArmHandPoseFabricConfig
+    assert isinstance(fabric_cfg, ArmHandPoseFabricConfig)
     # print(OmegaConf.to_yaml(fabric_cfg))
 
 
@@ -54,7 +55,7 @@ if __name__ == "__main__":
     # Define the task (cost and dynamics)
     task = MugRelocateTask(name="Mug Relocate",
                            fabric_cfg=fabric_cfg if use_ctrl_callback else None,
-                           warp_enabled=False)  # Not enough memory for Warp with mug mesh
+                           backend_type=BackendType.MJW)  # Not enough memory for Warp with mug mesh
 
     # Parse command-line arguments
     parser = argparse.ArgumentParser(
@@ -98,7 +99,7 @@ if __name__ == "__main__":
         print("Running CEM")
         ctrl = CEM(
             task,
-            num_samples=128,
+            num_samples=32,
             num_elites=5,
             sigma_start=0.5,
             sigma_min=0.5,

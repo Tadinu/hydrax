@@ -1,11 +1,12 @@
-from typing import Dict
+from typing import Dict, Union
 
 import jax
 import jax.numpy as jnp
 import mujoco as mj
 from mujoco import mjx
+import mujoco_warp as mjw
 
-from hydrax import ROOT
+from hydrax import ROOT, BackendType
 from hydrax.task_base import Task
 
 
@@ -32,12 +33,12 @@ class CubeRotation(Task):
         # Distance (m) beyond which we impose a high cube position cost
         self.delta = 0.015
 
-    def _get_cube_position_err(self, state: mjx.Data) -> jax.Array:
+    def _get_cube_position_err(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Position of the cube relative to the target grasp position."""
         sensor_adr = self.mjx_model.sensor_adr[self.cube_position_sensor]
         return state.sensordata[sensor_adr: sensor_adr + 3]
 
-    def _get_cube_orientation_err(self, state: mjx.Data) -> jax.Array:
+    def _get_cube_orientation_err(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Orientation of the cube relative to the target grasp orientation."""
         sensor_adr = self.mjx_model.sensor_adr[self.cube_orientation_sensor]
         cube_quat = state.sensordata[sensor_adr: sensor_adr + 4]
@@ -46,7 +47,8 @@ class CubeRotation(Task):
         goal_quat = jnp.array([1.0, 0.0, 0.0, 0.0])
         return mjx._src.math.quat_sub(cube_quat, goal_quat)
 
-    def running_cost(self, state: mjx.Data, control: jax.Array) -> jax.Array:
+    def running_cost(self, state: Union[mjx.Data, mjw.Data], control: jax.Array,
+                     batch_idx: Optional[int] = -1) -> jax.Array:
         """The running cost ℓ(xₜ, uₜ)."""
         position_err = self._get_cube_position_err(state)
         squared_distance = jnp.sum(jnp.square(position_err[0:2]))  # ignore z
@@ -61,7 +63,7 @@ class CubeRotation(Task):
 
         return position_cost + orientation_cost + grasp_cost
 
-    def terminal_cost(self, state: mjx.Data) -> jax.Array:
+    def terminal_cost(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """The terminal cost ϕ(x_T)."""
         position_err = self._get_cube_position_err(state)
         return 100 * jnp.sum(jnp.square(position_err))
@@ -76,7 +78,7 @@ class CubeRotation(Task):
         return {"geom_friction": new_frictions}
 
     def domain_randomize_data(
-            self, data: mjx.Data, rng: jax.Array
+            self, data: Union[mjx.Data, mjw.Data], rng: jax.Array
     ) -> Dict[str, jax.Array]:
         """Randomly shift the measured configurations."""
         shift = 0.005 * jax.random.normal(rng, (self.mjx_model.nq,))

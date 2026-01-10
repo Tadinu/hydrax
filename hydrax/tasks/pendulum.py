@@ -1,9 +1,11 @@
+from typing import Optional
 import jax
 import jax.numpy as jnp
 import mujoco as mj
 from mujoco import mjx
+import mujoco_warp as mjw
 
-from hydrax import ROOT
+from hydrax import ROOT, BackendType
 from hydrax.task_base import Task
 
 
@@ -17,13 +19,14 @@ class Pendulum(Task):
         )
         super().__init__(mj_model, trace_sites=["tip"], impl=impl)
 
-    def _distance_to_upright(self, state: mjx.Data) -> jax.Array:
+    def _distance_to_upright(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Get a measure of distance to the upright position."""
         theta = state.qpos[0] - jnp.pi
         theta_err = jnp.array([jnp.cos(theta) - 1, jnp.sin(theta)])
         return jnp.sum(jnp.square(theta_err))
 
-    def running_cost(self, state: mjx.Data, control: jax.Array) -> jax.Array:
+    def running_cost(self, state: Union[mjx.Data, mjw.Data], control: jax.Array,
+                     batch_idx: Optional[int] = -1) -> jax.Array:
         """The running cost ℓ(xₜ, uₜ)."""
         theta_cost = self._distance_to_upright(state)
         theta_dot_cost = 0.01 * jnp.square(state.qvel[0])
@@ -31,7 +34,7 @@ class Pendulum(Task):
         total_cost = theta_cost + theta_dot_cost + control_cost
         return total_cost
 
-    def terminal_cost(self, state: mjx.Data) -> jax.Array:
+    def terminal_cost(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """The terminal cost ϕ(x_T)."""
         theta_cost = self._distance_to_upright(state)
         theta_dot_cost = 0.01 * jnp.square(state.qvel[0])

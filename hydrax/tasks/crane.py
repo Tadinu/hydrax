@@ -1,11 +1,12 @@
-from typing import Dict
+from typing import Dict, Union, Optional
 
 import jax
 import jax.numpy as jnp
 import mujoco as mj
 from mujoco import mjx
+import mujoco_warp as mjw
 
-from hydrax import ROOT
+from hydrax import ROOT, BackendType
 from hydrax.task_base import Task
 
 
@@ -27,19 +28,20 @@ class Crane(Task):
         ]
         self.payload_idx = mj_model.body("payload").id
 
-    def _get_payload_position(self, state: mjx.Data) -> jax.Array:
+    def _get_payload_position(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Get the position of the payload relative to the target."""
         return state.sensordata[
-               self.payload_pos_sensor_adr: self.payload_pos_sensor_adr + 3
-               ]
+            self.payload_pos_sensor_adr: self.payload_pos_sensor_adr + 3
+        ]
 
-    def _get_payload_velocity(self, state: mjx.Data) -> jax.Array:
+    def _get_payload_velocity(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Get the velocity of the payload."""
         return state.sensordata[
-               self.payload_vel_sensor_adr: self.payload_vel_sensor_adr + 3
-               ]
+            self.payload_vel_sensor_adr: self.payload_vel_sensor_adr + 3
+        ]
 
-    def running_cost(self, state: mjx.Data, control: jax.Array) -> jax.Array:
+    def running_cost(self, state: Union[mjx.Data, mjw.Data], control: jax.Array,
+                     batch_idx: Optional[int] = -1) -> jax.Array:
         """The running cost ℓ(xₜ, uₜ) encourages payload tracking."""
         # Get the position and velocity of the payload relative to the target
         payload_pos = self._get_payload_position(state)
@@ -50,7 +52,7 @@ class Crane(Task):
         velocity_cost = jnp.sum(jnp.square(payload_vel))
         return position_cost + 0.1 * velocity_cost
 
-    def terminal_cost(self, state: mjx.Data) -> jax.Array:
+    def terminal_cost(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Terminal cost is the same as running cost."""
         return self.running_cost(state, jnp.zeros(self.mjx_model.nu))
 
@@ -98,7 +100,7 @@ class Crane(Task):
         }
 
     def domain_randomize_data(
-            self, data: mjx.Data, rng: jax.Array
+            self, data: Union[mjx.Data, mjw.Data], rng: jax.Array
     ) -> Dict[str, jax.Array]:
         """Add noise to the state estimate."""
         rng, q_rng, v_rng = jax.random.split(rng, 3)

@@ -18,6 +18,7 @@ from typing import Tuple
 import jax
 import jax.numpy as jp
 from mujoco import mjx
+import mujoco_warp as mjw
 from mujoco.mjx._src import math
 import numpy as np
 

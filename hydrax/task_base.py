@@ -6,14 +6,18 @@ from etils import epath
 from copy import deepcopy
 
 import numpy as np
+import warp as wp
 import jax
 import jax.numpy as jnp
 
 import mujoco as mj
 import mujoco.viewer
 from mujoco import mjx
+from mujoco.mjx._src import types as mjx_types
+import mujoco_warp as mjw
 
 # hydrax
+from hydrax import BackendType
 from hydrax.utils.video import VideoRecorder
 
 # mjmanip
@@ -41,6 +45,8 @@ class Task(ABC):
     ℓ(xₜ, uₜ) and ϕ(x_{T+1}) are defined by the task instance itself.
     """
 
+    FABRIC_ENV_WORLD_FILE_NAME: Optional[str] = None
+
     def get_assets(self) -> Dict[str, bytes]:
         return {}
 
@@ -57,6 +63,7 @@ class Task(ABC):
             obj_name: Optional[str] = None,
             keyframe: Optional[str] = None,
             trace_sites: Optional[Sequence[str]] = None,
+            backend_type: Optional[BackendType] = BackendType.MJX
         impl: str = "warp",
     ) -> None:
         """Set the model and simulation parameters.
@@ -77,19 +84,21 @@ class Task(ABC):
         self._mj_data: mj.MjData = None
         self.warp_enabled = (impl == 'warp')
         self._mjx_model: mjx.Model = None
+        self._mjw_model: mjw.Model = None
         self._xml_path: str = ""
         self._mj_viewer: mj.viewer.Handle = None
         self._mj_renderer: mj.Renderer = None
         self._mj_recorder: VideoRecorder = None
         if not hasattr(self, "sim_dt"):
-            self.sim_dt = sim_dt
+            self.sim_dt: float = sim_dt
         if not hasattr(self, "ctrl_dt"):
-            self.ctrl_dt = ctrl_dt
+            self.ctrl_dt: float = ctrl_dt
         self._obj_name: str = obj_name
         self._keyframe: str = keyframe
         self.trace_sites = trace_sites if trace_sites else []
-        self.u_min = u_min
-        self.u_max = u_max
+        self.backend_type: BackendType = backend_type
+        self.u_min: np.ndarray = u_min
+        self.u_max: np.ndarray = u_max
         self.num_ctrls: int = u_min.size if u_min is not None else 0
         self.ctrl_callback: Optional[Callable[[mjx.Data, jax.Array], jax.Array]] = None
         self.num_samples: int = 0
@@ -128,7 +137,11 @@ class Task(ABC):
 
         # MJX-Model
         # NOTE: Only create [mjx-model] here, [mjx-data] is dynamically made/updated at each rollout
-        self._mjx_model = mjx.put_model(self._mj_model, impl=impl)
+        self._mjx_model = mjx.put_model(self._mj_model, impl=impl) if (self.backend_type == BackendType.MJX or self.backend_type == BackendType.MJX_WARP) else None
+        self._mjw_model = mjw.put_model(self.mj_model) if (self.backend_type == BackendType.MJW) else None
+        self._mjw_data: mjw.Data = None
+        self._mjw_step_graph = None
+        self._mjw_forward_graph = None
 
         # Set actuator limits
         if self.u_min is None:
@@ -155,6 +168,36 @@ class Task(ABC):
             [self.mj_model.site(name).id for name in self.trace_sites]
         )
 
+    def mjw_init_data(self, num_samples: int):
+        if self.mjw_model:
+            self.num_samples = num_samples
+            self._mjw_data = mjw.put_data(self.mj_model, self.mj_data, nworld=num_samples,
+                                          njmax=1000)
+            self.mjw_create_graphs()
+
+    def mjw_create_graphs(self) -> None:
+        with wp.ScopedDevice(self.wp_device):
+            with wp.ScopedCapture() as capture:
+                mjw.step(self.mjw_model, self.mjw_data)
+            self._mjw_step_graph = capture.graph
+            with wp.ScopedCapture() as capture:
+                mjw.forward(self.mjw_model, self.mjw_data)
+            self._mjw_forward_graph = capture.graph
+
+    def mjw_forward(self) -> None:
+        with wp.ScopedDevice(self.wp_device):
+            if self._mjw_forward_graph is not None:
+                wp.capture_launch(self._mjw_forward_graph)
+            else:
+                mjw.forward(self.mjw_model, self.mjw_data)
+
+    def mjw_step(self) -> None:
+        with wp.ScopedDevice(self.wp_device):
+            if self._mjw_step_graph is not None:
+                wp.capture_launch(self._mjw_step_graph)
+            else:
+                mjw.step(self.mjw_model, self.mjw_data)
+
     @property  # -> Consistent with co-parent [mjx_env.MjxEnv]
     def dt(self):
         return self.ctrl_dt
@@ -176,6 +219,14 @@ class Task(ABC):
         return self._mjx_model.impl.value if self._mjx_model else None
 
     @property  # -> Consistent with co-parent [mjx_env.MjxEnv]
+    def mjw_model(self) -> mjw.Model:
+        return self._mjw_model
+
+    @property  # -> Consistent with co-parent [mjx_env.MjxEnv]
+    def mjw_data(self) -> mjw.Data:
+        return self._mjw_data
+
+    @property  # -> Consistent with co-parent [mjx_env.MjxEnv]
     def xml_path(self) -> str:
         return self._xml_path
 
@@ -183,10 +234,10 @@ class Task(ABC):
     def home_qpos(self):
         return []
 
-    def next_phase(self, state: mjx.Data) -> jnp.int32:
+    def next_phase(self, state: Union[mjx.Data, mjw.Data]) -> jnp.int32:
         return 0
 
-    def step_callback(self, state: mjx.Data):
+    def step_callback(self, state: Union[mjx.Data, mjw.Data]):
         pass
 
     def step(self, action: np.ndarray, kinematics_only: bool = False):
@@ -212,12 +263,14 @@ class Task(ABC):
         pass
 
     @abstractmethod
-    def running_cost(self, state: mjx.Data, control: jax.Array) -> jax.Array:
+    def running_cost(self, state: Union[mjx.Data, mjw.Data], control: jax.Array,
+                     batch_idx: Optional[int] = -1) -> jax.Array:
         """The running cost ℓ(xₜ, uₜ).
 
         Args:
             state: The current state xₜ.
             control: The control action uₜ.
+            step: The current step number.
 
         Returns:
             The scalar running cost ℓ(xₜ, uₜ)
@@ -225,7 +278,7 @@ class Task(ABC):
         pass
 
     @abstractmethod
-    def terminal_cost(self, state: mjx.Data) -> jax.Array:
+    def terminal_cost(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """The terminal cost ϕ(x_T).
 
         Args:
@@ -256,9 +309,10 @@ class Task(ABC):
         """
         return {}
 
-    def domain_randomize_data(
-            self, data: mjx.Data, rng: jax.Array
-    ) -> Dict[str, jax.Array]:
+    def wp_domain_randomize_model(self, kernel_seed: int) -> Dict[str, jax.Array]:
+        return {}
+
+    def domain_randomize_data(self, data: Union[mjx.Data, mjw.Data], rng: jax.Array) -> Dict[str, jax.Array]:
         """Generate randomized data elements for domain randomization.
 
         This is the place where we could randomize the initial state and other
@@ -272,6 +326,9 @@ class Task(ABC):
         Returns:
             A dictionary of randomized data elements.
         """
+        return {}
+
+    def wp_domain_randomize_data(self, kernel_seed: int) -> Dict[str, jax.Array]:
         return {}
 
     def check_success(self) -> bool:
@@ -288,19 +345,29 @@ class Task(ABC):
     def get_sensor_id(self, sensor_name: str) -> int:
         return self._mj_model.sensor(sensor_name).id
 
-    def get_sensor_data(self, mjx_data: mjx.Data, sensor_id: int, start: int = 0, end: int = 0) -> jax.Array:
+    def get_sensor_data(self, data: Union[mjx.Data, mjw.Data], sensor_id: int,
+                        start: int = 0, end: int = 0,
+                        batch_idx: int = 0) -> jax.Array:
         """Get sensor data given sensor id."""
-        # NOTE: Don't use [self.mjx_model], which may give incorrect adr if [warp_enabled] (This may be solved on future release)
+        # NOTE: Don't use [self.mjx_model], which may give incorrect adr in case of [MJX_WARP] backend
+        # (This may be solved on future release)
         sensor_adr = self.mj_model.sensor_adr[sensor_id]
         sensor_dim = self.mj_model.sensor_dim[sensor_id]
-        return mjx_data.sensordata[sensor_adr + start: sensor_adr + (end if end else sensor_dim)]
+        if isinstance(data, mjx.Data):
+            return data.sensordata[sensor_adr + start: sensor_adr + (end if end else sensor_dim)]
+        else:
+            sensor_adr_start = sensor_adr + start
+            sensor_adr_end = sensor_adr + (end if end else sensor_dim)
+            return wp.to_jax(data.sensordata)[batch_idx, sensor_adr_start: sensor_adr_end]
 
-    def get_sensor_data_by_name(self, mjx_data: mjx.Data, sensor_name: str, start: int = 0, end: int = 0) -> jax.Array:
+    def get_sensor_data_by_name(self, data: Union[mjx.Data, mjw.Data], sensor_name: str, start: int = 0,
+                                end: int = 0,
+                                batch_idx: int = 0) -> jax.Array:
         """Get sensor data given sensor name."""
         sensor_id = self.mj_model.sensor(sensor_name).id
-        return self.get_sensor_data(mjx_data, sensor_id, start, end)
+        return self.get_sensor_data(data, sensor_id, start, end, batch_idx=batch_idx)
 
-    def get_trace_sites(self, state: mjx.Data) -> jax.Array:
+    def get_trace_sites(self, state: Union[mjx.Data, mjw.Data], batch_idx: int = -1) -> jax.Array:
         """Get the positions of the trace sites at the current time step.
 
         Args:
@@ -312,9 +379,10 @@ class Task(ABC):
         if len(self.trace_site_ids) == 0:
             return jnp.zeros((0, 3))
 
-        return state.site_xpos[self.trace_site_ids]
+        return state.site_xpos[self.trace_site_ids] if self.mjx_model \
+            else wp.to_jax(state.site_xpos)[batch_idx, self.trace_site_ids]
 
-    def get_base_pose(self, state: mjx.Data) -> jnp.ndarray:
+    def get_base_pose(self, state: Union[mjx.Data, mjw.Data], batch_idx: int = -1) -> jnp.ndarray:
         return jnp.zeros(7)
 
     def get_state(self):
