@@ -1,14 +1,17 @@
+import os
 import argparse
 import hydra
 from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig, OmegaConf
 
+from xvfbwrapper import Xvfb
+
 # MuJoCo
 import mujoco as mj
+from evosax.algorithms.distribution_based import Sep_CMA_ES
 
 # Hydrax
-from evosax.algorithms.distribution_based import Sep_CMA_ES
-from hydrax import ROOT
+from hydrax import ROOT, BackendType
 from hydrax.algs import CEM, ICEM, MPPI, Evosax, PredictiveSampling, DIAL
 from hydrax.simulation.asynchronous import run_interactive as async_run_interactive
 from hydrax.simulation.deterministic import run_interactive as sync_run_interactive
@@ -33,23 +36,19 @@ fabric_cfg = None
 def fetch_fabric_config(cfg: DictConfig) -> None:
     global fabric_cfg
     fabric_cfg = OmegaConf.to_object(cfg)
-    assert type(fabric_cfg) == ArmHandPoseFabricConfig
+    assert isinstance(fabric_cfg, ArmHandPoseFabricConfig)
     # print(OmegaConf.to_yaml(fabric_cfg))
 
 
-# Asynchronous simulations must be wrapped in a __main__ block
-# https://docs.python.org/3/library/multiprocessing.html
-if __name__ == "__main__":
-    """
-    Run an interactive simulation of the panda picking object.
-    """
-
+def main(record_video: bool = False) -> None:
     # Define the task (cost and dynamics)
-    use_ctrl_callback = True
+    use_ctrl_callback = False
     fetch_fabric_config()
     task = PandaPickEnv(name="Panda pick",
-                        fabric_cfg=fabric_cfg if use_ctrl_callback else None,
-                        use_ctrl_callback=use_ctrl_callback, warp_enabled=True)
+                        # NOTE: Fabrics currently is not working due to failed FFI call from JAX -> Warp
+                        # fabric_cfg=fabric_cfg if use_ctrl_callback else None,
+                        use_ctrl_callback=use_ctrl_callback,
+                        backend_type=BackendType.MJX_WARP)
 
     # Parse command-line arguments
     parser = argparse.ArgumentParser(
@@ -95,7 +94,7 @@ if __name__ == "__main__":
             task,
             num_samples=128,
             num_elites=5,
-            sigma_start=2.0,
+            sigma_start=0.5,
             sigma_min=0.5,
             num_randomizations=8,
             plan_horizon=0.25,
@@ -165,6 +164,7 @@ if __name__ == "__main__":
             show_traces=False,
             max_traces=1,
             trace_color=[1.0, 1.0, 1.0, 1.0],
+            record_video=record_video
         )
     else:
         mj_model.opt.timestep = 0.005
@@ -178,3 +178,20 @@ if __name__ == "__main__":
             mj_model,
             mj_data
         )
+
+
+if __name__ == "__main__":
+    """
+    Run an interactive simulation of the panda picking object.
+    """
+    headless = False
+    if headless:
+        with Xvfb(width=720, height=480) as xvfb:
+            os.environ["MUJOCO_GL"] = "egl"
+            os.environ["PYOPENGL_PLATFORM"] = "egl"
+            assert os.environ["DISPLAY"] is not None, "Xvfb is required to start in advance!\n"
+            "Please use xvfbwrapper. DON'T RUN: `Xvfb :<no> -screen 0 720x480x24` DIRECTLY!"
+            print(f"Using Xvfb display: {xvfb.new_display}")
+            main(record_video=True)
+    else:
+        main()

@@ -25,7 +25,7 @@ from hydrax.mfr.allegro_env import AllegroContactProblem, PositionControlConstra
 
 CCAI_PATH = pathlib.Path(__file__).resolve().parents[1]
 
-device = 'cuda:0'
+device = HYDRAX_DEVICE
 obj_dof = 6
 # instantiate environment
 img_save_dir = pathlib.Path(f'{CCAI_PATH}/data/experiments/videos')
@@ -45,7 +45,7 @@ class AllegroScrewdriver6D(AllegroValveTurning):
                  friction_coefficient=0.95,
                  optimize_force=False,
                  obj_dof_code=[1, 1, 1, 1, 1, 1],
-                 device='cuda:0', **kwargs):
+                 device=HYDRAX_DEVICE, **kwargs):
         self.num_fingers = len(fingers)
         self.optimize_force = optimize_force
         super(AllegroScrewdriver6D, self).__init__(start=start, goal=goal, T=T, chain=chain,

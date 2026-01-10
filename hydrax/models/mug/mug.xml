@@ -26,17 +26,17 @@
 
       <default class="mug_base">
         <geom type="mesh" density="1250" contype="1" conaffinity="1" friction="1 0.5 0.01" condim="4"
-              rgba="1 0 0 1" group="3"/>
+              rgba="1 0 0 1" group="3"/> <!-- margin="0.0005" Not yet supported by MJX -->
       </default>
 
       <default class="mug_trunk">
         <geom type="mesh" density="1250" contype="1" conaffinity="1" friction="1 0.5 0.01" condim="4"
-              rgba="0 1 0 1" group="3"/>
+              rgba="0 1 0 1" group="3"/> <!-- margin="0.0005" Not yet supported by MJX -->
       </default>
 
       <default class="mug_handle">
         <geom type="mesh" density="1250" contype="1" conaffinity="1" friction="1 0.5 0.01" condim="4"
-              rgba="1 1 0 1" group="3"/>
+              rgba="1 1 0 1" group="3"/> <!-- margin="0.0005" Not yet supported by MJX -->
       </default>
 
     </default>
@@ -60,7 +60,7 @@
     <mesh name="contact13" file="contact13.stl" class="mesh"/>
   </asset>
   <worldbody>
-    <body name="mug" pos="0 0 0.05" childclass="grab">
+    <body name="mug" pos="0 0 0.15" childclass="grab">
       <site name="mug"/>
       <geom name="mug_whole_visual" mesh="mug" rgba="0 0 0.7 1.0" class="mug_visual"/>
       <geom name="mug_trunk0" mesh="contact0" class="mug_trunk"/>
@@ -77,6 +77,7 @@
       <geom name="mug_handle1" mesh="contact11" class="mug_handle"/>
       <geom name="mug_handle2" mesh="contact12" class="mug_handle"/>
       <geom name="mug_handle3" mesh="contact13" class="mug_handle"/>
+      <site name="mug_handle_center" pos="0.07 0 0.01" size="0.01 0.01 0.01" rgba="1 0.9 0.4 1"/>
     </body>
   </worldbody>
 </mujoco>

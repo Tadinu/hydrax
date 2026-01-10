@@ -20,8 +20,6 @@ from hydrax.mfr.utils.allegro_utils import *
 
 CCAI_PATH = pathlib.Path(__file__).resolve().parents[1]
 
-# device = 'cuda:0'
-# torch.cuda.set_device(1)
 obj_dof = 3
 # instantiate environment
 img_save_dir = pathlib.Path(f'{CCAI_PATH}/data/experiments/videos')
@@ -68,7 +66,7 @@ class AllegroScrewdriver(AllegroValveTurning):
                  arm_stiffness=None,
                  force_balance=False,
                  collision_checking=False,
-                 device='cuda:0',
+                 device=HYDRAX_DEVICE,
                  obj_gravity=False,
                  contact_region=False,
                  **kwargs):

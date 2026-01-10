@@ -1,24 +1,9 @@
-<mujoco model="leap_scene">
-  <include file="leap_rh_freejoint_mjx.xml"/>
+<mujoco model="leap_rh_mjx_fabric_freejoint_cube_scene">
+  <include file="leap_rh_mjx_freejoint.xml"/>
   <include file="../cube/reorientation_cube.xml"/>
 
   <statistic center="0.15 0 0" extent="0.4" meansize="0.01"/>
   <size nuserdata="1"/>
-
-  <default>
-    <default class="translation">
-      <position kp="10" dampratio="1" ctrlrange="-.5 .5"/>
-    </default>
-    <default class="rotation">
-      <!--
-      Note that the rotational control range is purposefully limited to (-pi/2, pi/2) to avoid the
-      documented instabillity near pi, which is due to taking quaternion differences.
-      Increase this range to pi or bigger in order to see the instabillity.
-      See here for more details https://mujoco.readthedocs.io/en/latest/XMLreference.html#actuator
-      -->
-      <position kp=".5" dampratio="1" ctrlrange="-1.571 1.571"/>
-    </default>
-  </default>
 
   <visual>
     <headlight diffuse=".8 .8 .8" ambient=".2 .2 .2" specular="1 1 1"/>
@@ -32,13 +17,13 @@
   <asset>
     <texture type="skybox" builtin="gradient" rgb1="1 1 1" rgb2="1 1 1" width="800" height="800"/>
     <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="1 1 1" rgb2="1 1 1" markrgb="0 0 0"
-      width="300" height="300"/>
+             width="300" height="300"/>
     <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0"/>
   </asset>
 
   <default>
     <default class="cube">
-      <geom friction="0.3 0.05 0.01" conaffinity="2" />
+      <geom friction="0.3 0.05 0.01" conaffinity="2"/>
     </default>
   </default>
 
@@ -50,20 +35,6 @@
     </body>
   </worldbody>
 
-  <actuator>
-    <general name="LRTx" site="leap_base" refsite="reference" gear="1 0 0 0 0 0" class="translation"/>
-    <general name="LRTy" site="leap_base" refsite="reference" gear="0 1 0 0 0 0" class="translation"/>
-    <general name="LRTz" site="leap_base" refsite="reference" gear="0 0 1 0 0 0" class="translation"/>
-    <general name="LRRx" site="leap_base" refsite="reference" gear="0 0 0 1 0 0" class="rotation"/>
-    <general name="LRRy" site="leap_base" refsite="reference" gear="0 0 0 0 1 0" class="rotation"/>
-    <general name="LRRz" site="leap_base" refsite="reference" gear="0 0 0 0 0 1" class="rotation"/>
-    <!--
-    <general name="LRTx" joint="LRTx" ctrlrange="-0.25 0.25" biastype="affine" gainprm="500 0 0" biasprm="0 -200 0"/>
-    <general name="LRTy" joint="LRTy" ctrlrange="-0.25 0.25" biastype="affine" gainprm="500 0 0" biasprm="0 -200 0"/>
-    <general name="LRTz" joint="LRTz" ctrlrange="-0.5 0.5" biastype="affine" gainprm="500 0 0" biasprm="0 -200 0"/>
-    -->
-  </actuator>
-
   <sensor>
     <!-- cube. -->
     <framepos name="cube_position" objtype="body" objname="cube"/>
@@ -72,7 +43,7 @@
     <contact name="cube_contact_with_if_tip" geom1="cube" geom2="if_tip" data="found force"/>
     <contact name="cube_contact_with_mf_tip" geom1="cube" geom2="mf_tip" data="found force"/>
     <contact name="cube_contact_with_rf_tip" geom1="cube" geom2="rf_tip" data="found force"/>
-    <framepos name="cube_distance_to_grasp" objtype="body" objname="cube" reftype="site" refname="grasp_site" />
+    <framepos name="cube_distance_to_grasp" objtype="body" objname="cube" reftype="site" refname="grasp_site"/>
     <framepos name="cube_distance_to_target" objtype="body" objname="cube" reftype="body" refname="target"/>
     <framequat name="cube_orientation" objtype="body" objname="cube"/>
     <framequat name="cube_orientation_from_target" objtype="body" objname="cube" reftype="body" refname="target"/>

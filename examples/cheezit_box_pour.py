@@ -1,8 +1,10 @@
 import argparse
 
 import mujoco as mj
-
 from evosax.algorithms.distribution_based import Sep_CMA_ES
+
+# hydrax
+from hydrax import BackendType
 from hydrax.algs import CEM, ICEM, MPPI, Evosax, PredictiveSampling
 from hydrax.simulation.deterministic import run_interactive
 from hydrax.tasks.cheezit_box_pour_task import CheezitBoxPouringTask
@@ -15,7 +17,7 @@ Double click on the floating target box, then change the goal orientation with
 """
 
 # Define the task (cost and dynamics)
-task = CheezitBoxPouringTask(name="Cheezit-Box Pour", warp_enabled=False)
+task = CheezitBoxPouringTask(name="Cheezit-Box Pour", backend_type=BackendType.MJX_WARP)
 
 # Parse command-line arguments
 parser = argparse.ArgumentParser(

@@ -23,6 +23,7 @@ import jax
 import jax.numpy as jp
 from ml_collections import config_dict
 from mujoco import mjx
+import mujoco_warp as mjw
 from mujoco.mjx._src import math
 import numpy as np
 
@@ -32,7 +33,7 @@ from mujoco_playground._src import mjx_env
 from mujoco_playground._src import reward as reward_util
 
 # hydrax
-from hydrax import ROOT
+from hydrax import ROOT, BackendType
 from hydrax.tasks.panda.panda_robotiq_base_env import PandaRobotiqBaseEnv
 
 WORKSPACE_MIN = (0.3, -0.5, 0.0)
@@ -279,7 +280,7 @@ class PandaRobotiqPushCubeEnv(PandaRobotiqBaseEnv):
         )
         return state
 
-    def _get_termination(self, data: mjx.Data):
+    def _get_termination(self, data: Union[mjx.Data, mjw.Data]):
         box_pos = data.xpos[self._obj_body]
         box_oob = box_pos[2] < -0.01
         box_oob |= (box_pos[0] > WORKSPACE_MAX[0]) | (box_pos[0] < WORKSPACE_MIN[0])
@@ -393,7 +394,7 @@ class PandaRobotiqPushCubeEnv(PandaRobotiqBaseEnv):
         return state.replace(data=data)
 
     def _get_reward(
-            self, data: mjx.Data, info: dict[str, Any], action: jax.Array
+            self, data: Union[mjx.Data, mjw.Data], info: dict[str, Any], action: jax.Array
     ) -> dict[str, jax.Array]:
         # Target, gripper, and object rewards.
         target_pos = data.mocap_pos[self._mocap_target, :].ravel()
@@ -502,7 +503,7 @@ class PandaRobotiqPushCubeEnv(PandaRobotiqBaseEnv):
 
         return obs
 
-    def _get_single_obs(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
+    def _get_single_obs(self, data: Union[mjx.Data, mjw.Data], info: dict[str, Any]) -> jax.Array:
         target_pos = data.mocap_pos[self._mocap_target, :].ravel()
         target_quat = data.mocap_quat[self._mocap_target, :].ravel()
         target_mat = math.quat_to_mat(target_quat)

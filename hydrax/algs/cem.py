@@ -5,6 +5,7 @@ import jax.numpy as jnp
 from flax.struct import dataclass
 
 from mujoco import mjx
+import mujoco_warp as mjw
 
 from hydrax.alg_base import SamplingBasedController, SamplingParams, Trajectory
 from hydrax.risk import RiskStrategy
@@ -135,7 +136,7 @@ class CEM(SamplingBasedController):
             self, params: CEMParams, rollouts: Trajectory
     ) -> CEMParams:
         """Update the mean with an exponentially weighted average."""
-        costs = jnp.sum(rollouts.costs, axis=1)  # sum over time steps
+        costs = jnp.sum(rollouts.costs, axis=1)
 
         # Sort the costs and get the indices of the elites.
         indices = jnp.argsort(costs)

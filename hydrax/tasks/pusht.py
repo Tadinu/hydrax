@@ -1,11 +1,12 @@
-from typing import Dict
+from typing import Dict, Optional
 
 import jax
 import jax.numpy as jnp
 import mujoco as mj
 from mujoco import mjx
+import mujoco_warp as mjw
 
-from hydrax import ROOT
+from hydrax import ROOT, BackendType
 from hydrax.task_base import Task
 
 
@@ -27,25 +28,26 @@ class PushT(Task):
             mj_model, mj.mjtObj.mjOBJ_SENSOR, "orientation"
         )
 
-    def _get_position_err(self, state: mjx.Data) -> jax.Array:
+    def _get_position_err(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Position of the block relative to the target position."""
         sensor_adr = self.mjx_model.sensor_adr[self.block_position_sensor]
         return state.sensordata[sensor_adr: sensor_adr + 3]
 
-    def _get_orientation_err(self, state: mjx.Data) -> jax.Array:
+    def _get_orientation_err(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Orientation of the block relative to the target orientation."""
         sensor_adr = self.mjx_model.sensor_adr[self.block_orientation_sensor]
         block_quat = state.sensordata[sensor_adr: sensor_adr + 4]
         goal_quat = jnp.array([1.0, 0.0, 0.0, 0.0])
         return mjx._src.math.quat_sub(block_quat, goal_quat)
 
-    def _close_to_block_err(self, state: mjx.Data) -> jax.Array:
+    def _close_to_block_err(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Position of the pusher block relative to the block."""
         block_pos = state.qpos[:2]
         pusher_pos = state.qpos[3:] + jnp.array([0.0, 0.1])  # y bias
         return block_pos - pusher_pos
 
-    def running_cost(self, state: mjx.Data, control: jax.Array) -> jax.Array:
+    def running_cost(self, state: Union[mjx.Data, mjw.Data], control: jax.Array,
+                     batch_idx: Optional[int] = -1) -> jax.Array:
         """The running cost ℓ(xₜ, uₜ)."""
         position_err = self._get_position_err(state)
         orientation_err = self._get_orientation_err(state)
@@ -57,7 +59,7 @@ class PushT(Task):
 
         return position_cost + orientation_cost + 0.01 * close_to_block_cost
 
-    def terminal_cost(self, state: mjx.Data) -> jax.Array:
+    def terminal_cost(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """The terminal cost ℓ_T(x_T)."""
         return self.running_cost(state, jnp.zeros(self.mjx_model.nu))
 

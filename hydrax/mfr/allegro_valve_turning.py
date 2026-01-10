@@ -10,7 +10,7 @@ from hydrax.mfr.allegro_env import AllegroContactProblem, euler_to_angular_veloc
 
 CCAI_PATH = os.path.dirname(os.path.abspath(__file__))
 
-# device = 'cuda:0'
+# device = HYDRAX_DEVICE
 # instantiate environment
 img_save_dir = pathlib.Path(f'{CCAI_PATH}/data/experiments/videos')
 
@@ -59,7 +59,7 @@ class AllegroValveTurning(AllegroContactProblem):
                  dx=None,
                  du=None,
                  contact_region=False,
-                 device='cuda:0', **kwargs):
+                 device=HYDRAX_DEVICE, **kwargs):
         self.screwdriver_force_balance = screwdriver_force_balance
         self.num_fingers = len(fingers)
         self.object_location = object_location

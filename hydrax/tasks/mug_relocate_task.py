@@ -13,12 +13,13 @@ import jax.numpy as jnp
 
 # mujoco
 from mujoco import mjx
+import mujoco_warp as mjw
 
 # mujoco playground
 from mujoco_playground._src import mjx_env
 
 # hydrax
-from hydrax import ROOT
+from hydrax import ROOT, BackendType
 from hydrax.task_base import Task
 
 # mjmanip
@@ -67,7 +68,7 @@ class MugRelocateTask(Task):
     def __init__(self, name: str,
                  fabric_cfg: Optional[ArmHandPoseFabricConfig] = None,
                  use_ctrl_callback: bool = False,
-                 warp_enabled: bool = False) -> None:
+                 backend_type: BackendType = BackendType.MJX) -> None:
         """Load the MuJoCo model and set task parameters."""
 
         self.HAND_MODEL_NAME = "leap_rh_mjx"
@@ -76,7 +77,6 @@ class MugRelocateTask(Task):
         # Fabrics
         self.fabrics_controller: FabricsController = None
         self.fabric_cfg: ArmHandPoseFabricConfig = fabric_cfg
-        self.fabric_env_world_file_name: str = 'kuka_allegro_boxes'
         self.ctrl_callback = self.mjx_fabrics_convert_free_hand_to_full_arm_hand_ctrl \
             if use_ctrl_callback and fabric_cfg else None
 
@@ -84,7 +84,7 @@ class MugRelocateTask(Task):
                          xml_path=epath.Path(ROOT) / "models" / "leap_hand" / "scene_leap_rh_mjx_relocate_mug.xml",
                          obj_name="mug",
                          trace_sites=["grasp_site"] + self.FINGER_TIPS_NAMES,
-                         warp_enabled=warp_enabled)
+                         backend_type=backend_type)
 
         # Move [base_body]
         base_body = self.mj_model.body("leap_mount")
@@ -142,7 +142,7 @@ class MugRelocateTask(Task):
                                                     object_model_paths=LeapWithFabrics.OBJECT_MODEL_PATHS,
                                                     object_collision_mesh_names=LeapWithFabrics.OBJECT_COLLISION_MESH_NAMES,
                                                     robot_path_or_xml=HAND_XML_PATH,
-                                                    env_world_file_name=self.fabric_env_world_file_name,
+                                                    env_world_file_name=self.FABRIC_ENV_WORLD_FILE_NAME,
                                                     use_finger_fabrics=False,
                                                     use_cuda_graph=True,
                                                     batch_size=1)
@@ -164,62 +164,68 @@ class MugRelocateTask(Task):
             HAND_HOME_QPOS + self._init_obj_qpos.tolist() if self._obj_name else HAND_HOME_QPOS
         )
 
-    def _get_mug_position(self, data: mjx.Data) -> jax.Array:
+    def _get_mug_position(self, data: Union[mjx.Data, mjw.Data], batch_idx: int = -1) -> jax.Array:
         """Position of the mug in world frame."""
-        return self.get_sensor_data(data, self.mug_position_sensor)
+        return self.get_sensor_data(data, self.mug_position_sensor, batch_idx=batch_idx)
 
-    def _get_mug_contact_with_palm(self, data: mjx.Data) -> jax.Array:
+    def _get_mug_contact_with_palm(self, data: Union[mjx.Data, mjw.Data], batch_idx: int = -1) -> jax.Array:
         """Num of mug contacts with palm"""
         # [found: 0 or num_contacts]
-        return self.get_sensor_data(data, self.mug_contact_with_palm_sensor, end=1)
+        return self.get_sensor_data(data, self.mug_contact_with_palm_sensor, end=1, batch_idx=batch_idx)
 
-    def _get_obj_contact_with_finger_tips(self, data: mjx.Data) -> jax.Array:
+    def _get_obj_contact_with_finger_tips(self, data: Union[mjx.Data, mjw.Data], batch_idx: int = -1) -> jax.Array:
         # Each return [found: 0 or num_contacts]
         return jnp.sum(jnp.array(
-            [self.get_sensor_data(data, self.obj_contact_with_finger_tip_sensors[f], end=1) for f in
-             self.FINGER_TIPS_NAMES]))
+            [self.get_sensor_data(data, self.obj_contact_with_finger_tip_sensors[f], end=1, batch_idx=batch_idx)
+             for f in self.FINGER_TIPS_NAMES]))
 
-    def _get_obj_contact_force_with_finger_tips(self, data: mjx.Data) -> jax.Array:
+    def _get_obj_contact_force_with_finger_tips(self, data: Union[mjx.Data, mjw.Data],
+                                                batch_idx: int = -1) -> jax.Array:
         return jnp.sum(jnp.square(jnp.array([self.get_sensor_data(data, self.obj_contact_with_finger_tip_sensors[f],
-                                                                  start=1, end=4) for f in self.FINGER_TIPS_NAMES])))
+                                                                  start=1, end=4,
+                                                                  batch_idx=batch_idx)
+                                             for f in self.FINGER_TIPS_NAMES])))
 
-    def _get_mug_distance_to_grasp(self, data: mjx.Data) -> jax.Array:
+    def _get_mug_distance_to_grasp(self, data: Union[mjx.Data, mjw.Data], batch_idx: int = -1) -> jax.Array:
         """Position of the mug relative to the grasp."""
-        return self.get_sensor_data(data, self.mug_distance_to_grasp_sensor)
+        return self.get_sensor_data(data, self.mug_distance_to_grasp_sensor, batch_idx=batch_idx)
 
-    def _get_mug_distance_to_target(self, data: mjx.Data) -> jax.Array:
+    def _get_mug_distance_to_target(self, data: Union[mjx.Data, mjw.Data], batch_idx: int = -1) -> jax.Array:
         """Position of the mug relative to the target."""
-        return self.get_sensor_data(data, self.mug_distance_to_target_sensor)
+        return self.get_sensor_data(data, self.mug_distance_to_target_sensor, batch_idx=batch_idx)
 
-    def _get_mug_orientation(self, data: mjx.Data) -> jax.Array:
+    def _get_mug_orientation(self, data: Union[mjx.Data, mjw.Data], batch_idx: int = -1) -> jax.Array:
         """Orientation of the mug in world frame."""
-        return self.get_sensor_data(data, self.mug_orientation_sensor)
+        return self.get_sensor_data(data, self.mug_orientation_sensor, batch_idx=batch_idx)
 
-    def _get_mug_orientation_distance_to_target(self, data: mjx.Data) -> jax.Array:
+    def _get_mug_orientation_distance_to_target(self, data: Union[mjx.Data, mjw.Data],
+                                                batch_idx: int = -1) -> jax.Array:
         """Orientation of the mug relative to the target grasp orientation."""
-        mug_relative_to_target_quat = self.get_sensor_data(data, self.mug_orientation_from_target_sensor)
+        mug_relative_to_target_quat = self.get_sensor_data(data, self.mug_orientation_from_target_sensor,
+                                                           batch_idx=batch_idx)
 
         # Quaternion subtraction gives us rotation relative to goal
         goal_relative_quat = jnp.array([1.0, 0.0, 0.0, 0.0])
         return jnp.sum(jnp.square(mjx._src.math.quat_sub(mug_relative_to_target_quat, goal_relative_quat)))
 
-    def _get_mug_linear_velocity(self, data: mjx.Data) -> jax.Array:
+    def _get_mug_linear_velocity(self, data: Union[mjx.Data, mjw.Data], batch_idx: int = -1) -> jax.Array:
         """Velocity of the mug in world."""
-        return self.get_sensor_data(data, self.mug_linear_velocity_sensor)
+        return self.get_sensor_data(data, self.mug_linear_velocity_sensor, batch_idx=batch_idx)
 
-    def _get_finger_tips_distance_to_mug(self, data: mjx.Data) -> jax.Array:
+    def _get_finger_tips_distance_to_mug(self, data: Union[mjx.Data, mjw.Data], batch_idx: int = -1) -> jax.Array:
         """Distance of the fingertips from the object."""
         return jnp.sum(
-            jnp.square(jnp.array([self.get_sensor_data(data, s) for s in self.finger_tip_distance_to_mug_sensors])))
+            jnp.square(jnp.array(
+                [self.get_sensor_data(data, s, batch_idx=batch_idx) for s in self.finger_tip_distance_to_mug_sensors])))
 
     # Palm cost
-    def _get_palm_cost(self, state: mjx.Data, encourage: bool) -> jax.Array:
-        return (-1 if encourage else 1) * 0.05 * self._get_mug_contact_with_palm(state)
+    def _get_palm_cost(self, state: Union[mjx.Data, mjw.Data], encourage: bool, batch_idx: int = -1) -> jax.Array:
+        return (-1 if encourage else 1) * 0.05 * self._get_mug_contact_with_palm(state, batch_idx=batch_idx)
 
     # Fingertips total cost
-    def _get_fingertips_cost(self, state: mjx.Data) -> jax.Array:
+    def _get_fingertips_cost(self, state: Union[mjx.Data, mjw.Data], batch_idx: int = -1) -> jax.Array:
         # cost = 50 * self._get_finger_tips_distance_to_obj(state)
-        cost = -0.05 * self._get_obj_contact_with_finger_tips(state)
+        cost = -0.05 * self._get_obj_contact_with_finger_tips(state, batch_idx=batch_idx)
         return cost
 
     @staticmethod
@@ -228,21 +234,21 @@ class MugRelocateTask(Task):
         mask = jax.nn.sigmoid((eps - err) * steep)
         return mask * (1.0 / x) ** 2
 
-    def is_reaching(self, state: mjx.Data) -> Any:
+    def is_reaching(self, state: Union[mjx.Data, mjw.Data]) -> Any:
         return self.phase == RelocatePhase.REACHING and not self.is_in_object_proximity(state)
 
-    def is_in_object_proximity(self, state: mjx.Data) -> Any:
+    def is_in_object_proximity(self, state: Union[mjx.Data, mjw.Data]) -> Any:
         grasp_position_err = self._get_mug_distance_to_grasp(state)
         grasp_squared_distance = jnp.sum(jnp.square(grasp_position_err[0:2]))
         # [0:2]ignore z since it can never be fully close to 0 spatially (3D)
         return grasp_squared_distance > self.grasp_threshold ** 2
 
-    def is_relocating(self, state: mjx.Data) -> Any:
+    def is_relocating(self, state: Union[mjx.Data, mjw.Data]) -> Any:
         target_distance_err = self._get_mug_distance_to_target(state)
         target_squared_distance = jnp.sum(jnp.square(target_distance_err))
         return (~self.is_reaching(state)) & (target_squared_distance > self.grasp_threshold ** 2)
 
-    def next_phase(self, state: mjx.Data) -> jnp.int32:
+    def next_phase(self, state: Union[mjx.Data, mjw.Data]) -> jnp.int32:
         is_near_object = jnp.any(self.is_in_object_proximity(state))
         phase = state.userdata[0].astype(jnp.int32)
         return jax.lax.select(phase == RelocatePhase.INITIAL, RelocatePhase.REACHING,
@@ -264,7 +270,7 @@ class MugRelocateTask(Task):
             right_value
         )
 
-    def grasp_position_cost(self, data: mjx.Data, control: jax.Array) -> jax.Array:
+    def grasp_position_cost(self, data: Union[mjx.Data, mjw.Data], control: jax.Array) -> jax.Array:
         grasp_position_err = self._get_mug_distance_to_grasp(data)
         grasp_squared_distance = jnp.sum(jnp.square(grasp_position_err[0:2]))
         # [0:2]ignore z since it can never be fully close to 0 spatially (3D)
@@ -276,7 +282,7 @@ class MugRelocateTask(Task):
         grasp_control_cost = k_grasp * jnp.sum(jnp.square(control))
         return grasp_position_cost + grasp_orientation_cost + grasp_control_cost
 
-    def bring_to_target_cost(self, data: mjx.Data, control: jax.Array) -> jax.Array:
+    def bring_to_target_cost(self, data: Union[mjx.Data, mjw.Data], control: jax.Array) -> jax.Array:
         fingers_squared_distance = self._get_finger_tips_distance_to_mug(data)
         fingers_distance_cost = 10000 * fingers_squared_distance
 
@@ -292,21 +298,22 @@ class MugRelocateTask(Task):
         # )
         return target_distance_cost + fingers_distance_cost
 
-    def running_cost(self, data: mjx.Data, control: jax.Array) -> jax.Array:
+    def running_cost(self, state: Union[mjx.Data, mjw.Data], control: jax.Array,
+                     batch_idx: Optional[int] = -1) -> jax.Array:
         """The running cost ℓ(xₜ, uₜ)."""
-        position_err = self._get_mug_distance_to_grasp(data)
+        position_err = self._get_mug_distance_to_grasp(state, batch_idx)
         squared_distance = jnp.sum(jnp.square(position_err[0:2]))  # ignore z
         # Only highly weighed until reaching certain threshold, from which prioritize other costs (orientation, grasp, etc.)
         reaching_cost = 100 * jnp.maximum(
             squared_distance - self.grasp_threshold ** 2, 0.0
         )
         position_cost = 0.1 * squared_distance + reaching_cost
-        orientation_cost = 50 * self._get_mug_orientation_distance_to_target(data)
+        orientation_cost = 50 * self._get_mug_orientation_distance_to_target(state, batch_idx)
 
-        grasp_cost = 0.001 * jnp.sum(jnp.square(control)) + self._get_fingertips_cost(data)
+        grasp_cost = 0.001 * jnp.sum(jnp.square(control)) + self._get_fingertips_cost(state, batch_idx)
         return position_cost + orientation_cost + grasp_cost
 
-    def running_relocate_cost(self, data: mjx.Data, control: jax.Array) -> jax.Array:
+    def running_relocate_cost(self, data: Union[mjx.Data, mjw.Data], control: jax.Array) -> jax.Array:
         """The running cost ℓ(xₜ, uₜ)."""
         phase = data.userdata[0].astype(jnp.int32)
         return jax.lax.select((phase == RelocatePhase.REACHING) | (phase == RelocatePhase.GRASPING),
@@ -315,12 +322,12 @@ class MugRelocateTask(Task):
                                              self.bring_to_target_cost(data, control),
                                              jnp.array([100000000.0], dtype=jnp.float32)))
 
-    def terminal_cost(self, data: mjx.Data) -> jax.Array:
+    def terminal_cost(self, data: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """The terminal cost ϕ(x_T)."""
         position_err = self._get_mug_distance_to_grasp(data)
         return 100 * jnp.sum(jnp.square(position_err)) + self._get_fingertips_cost(data)
 
-    def terminal_relocate_cost(self, data: mjx.Data) -> Union[jax.Array, Any]:
+    def terminal_relocate_cost(self, data: Union[mjx.Data, mjw.Data]) -> Union[jax.Array, Any]:
         """The terminal cost ϕ(x_T)."""
         phase = data.userdata[0].astype(jnp.int32)
         grasp_distance_cost = 100 * jnp.sum(jnp.square(self._get_mug_distance_to_grasp(data)))
@@ -339,15 +346,14 @@ class MugRelocateTask(Task):
         )
         return {"geom_friction": new_frictions}
 
-    def domain_randomize_data(
-            self, data: mjx.Data, rng: jax.Array
-    ) -> Dict[str, jax.Array]:
+    def domain_randomize_data(self, data: mjx.Data, rng: jax.Array) -> Dict[str, jax.Array]:
         """Randomly shift the measured configurations."""
         shift = 0.005 * jax.random.normal(rng, (self.mjx_model.nq,))
         return {"qpos": data.qpos + shift}
 
     @partial(jit, static_argnums=(0,))
-    def mjx_fabrics_convert_free_hand_to_full_arm_hand_ctrl(self, mjx_data: mjx.Data, u: jnp.ndarray) -> jnp.ndarray:
+    def mjx_fabrics_convert_free_hand_to_full_arm_hand_ctrl(self, mjx_data: Union[mjx.Data, mjw.Data],
+                                                            u: jnp.ndarray) -> jnp.ndarray:
         grasp_site_delta = jnp.zeros(7)
         grasp_site_ctrl = self.mjx_model.opt.timestep * u[:6]  # 6DOF in 3D
 

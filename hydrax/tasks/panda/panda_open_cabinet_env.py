@@ -20,6 +20,7 @@ import jax
 import jax.numpy as jp
 from ml_collections import config_dict
 from mujoco import mjx
+import mujoco_warp as mjw
 import mujoco as mj  # pylint: disable=unused-import
 from mujoco.mjx._src import math
 
@@ -29,7 +30,7 @@ from mujoco_playground._src.mjx_env import State  # pylint: disable=g-importing-
 
 from hydrax.task_base import Task
 from hydrax.tasks.panda.panda_base_task import PandaBaseEnv
-from hydrax import ROOT
+from hydrax import ROOT, BackendType
 
 
 def default_config() -> config_dict.ConfigDict:
@@ -97,7 +98,7 @@ class PandaOpenCabinetEnv(PandaBaseEnv):
             jp.array(self._init_ctrl).at[:7].set(self._init_ctrl[:7] + perturb_arm)
         )
 
-        data: mjx.Data = mjx_env.init(
+        data: Union[mjx.Data, mjw.Data] = mjx_env.init(
             self._mjx_model, init_q, jp.zeros(self._mjx_model.nv), ctrl=init_ctrl
         )
 
@@ -123,7 +124,7 @@ class PandaOpenCabinetEnv(PandaBaseEnv):
         ctrl = state.data.ctrl + delta
         ctrl = jp.clip(ctrl, self._lowers, self._uppers)
 
-        data: mjx.Data = mjx_env.step(
+        data: Union[mjx.Data, mjw.Data] = mjx_env.step(
             self._mjx_model, state.data, ctrl, self.n_substeps
         )
 
@@ -149,15 +150,16 @@ class PandaOpenCabinetEnv(PandaBaseEnv):
 
         return state
 
-        def running_cost(self, state: mjx.Data, control: jax.Array) -> jax.Array:
+        def running_cost(self, state: Union[mjx.Data, mjw.Data], control: jax.Array,
+                         step: Optional[int] = -1) -> jax.Array:
             """The running cost ℓ(xₜ, uₜ)."""
             pass
 
-        def terminal_cost(self, state: mjx.Data) -> jax.Array:
+        def terminal_cost(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
             """The terminal cost ϕ(x_T)."""
             pass
 
-    def _get_rewards(self, data: mjx.Data, info: dict):
+    def _get_rewards(self, data: Union[mjx.Data, mjw.Data], info: dict):
         # Compute reward terms
         target_pos = info["target_pos"]
         box_pos = data.xpos[self._obj_body]
@@ -197,7 +199,7 @@ class PandaOpenCabinetEnv(PandaBaseEnv):
             "robot_target_qpos": robot_target_qpos,
         }
 
-    def _get_obs(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
+    def _get_obs(self, data: Union[mjx.Data, mjw.Data], info: dict[str, Any]) -> jax.Array:
         grasp_pos = data.site_xpos[self._grasp_site]
         grasp_mat = data.site_xmat[self._grasp_site].ravel()
         target_mat = math.quat_to_mat(data.mocap_quat[self._mocap_target])

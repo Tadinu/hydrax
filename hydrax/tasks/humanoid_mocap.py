@@ -7,9 +7,10 @@ import mujoco as mj
 import numpy as np
 from huggingface_hub import hf_hub_download
 from mujoco import mjx
+import mujoco_warp as mjw
 from mujoco.mjx._src.math import quat_sub
 
-from hydrax import ROOT
+from hydrax import ROOT, BackendType
 from hydrax.task_base import Task
 
 
@@ -377,7 +378,7 @@ class HumanoidMocap(Task):
         }
 
     def domain_randomize_data(
-            self, data: mjx.Data, rng: jax.Array
+            self, data: Union[mjx.Data, mjw.Data], rng: jax.Array
     ) -> Dict[str, jax.Array]:
         """Randomly perturb the measured base position and velocities."""
         rng, q_rng, v_rng = jax.random.split(rng, 3)

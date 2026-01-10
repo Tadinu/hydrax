@@ -8,7 +8,7 @@ from hydrax.mfr.allegro_valve_turning import AllegroValveTurning
 
 CCAI_PATH = pathlib.Path(__file__).resolve().parents[1]
 
-device = 'cuda:0'
+device = HYDRAX_DEVICE
 obj_dof = 6
 # instantiate environment
 img_save_dir = pathlib.Path(f'{CCAI_PATH}/data/experiments/videos')
@@ -44,7 +44,7 @@ class AllegroCuboidTurning(AllegroValveTurning):
                  friction_coefficient=0.95,
                  obj_dof_code=[1, 1, 1, 1, 1, 1],
                  obj_gravity=False,
-                 device='cuda:0', **kwargs):
+                 device=HYDRAX_DEVICE, **kwargs):
         self.num_fingers = len(fingers)
         self.object_asset_pos = object_asset_pos
         self.obj_mass = 0.03

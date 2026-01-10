@@ -43,10 +43,11 @@ BaseConstrainedSteinTrajOpt = ConstrainedSteinTrajOpt
 # mujoco
 import jax
 from mujoco import mjx
+import mujoco_warp as mjw
 from mujoco_playground._src import mjx_env
 
 # hydrax
-from hydrax import ROOT
+from hydrax import ROOT, BackendType
 from hydrax.tasks.screw_driver_rotate_task import ScrewDriverRotateTask
 from hydrax.mfr.utils.allegro_utils import all_finger_constraints, partial_to_full_state
 
@@ -152,7 +153,7 @@ class AllegroObjectProblem(ConstrainedSVGDProblem):
                  fingers=['index', 'middle', 'ring', 'thumb'],
                  obj_dof_code=[0, 0, 0, 0, 0, 0],
                  obj_joint_dim=0,
-                 device='cuda:0'):
+                 device=HYDRAX_DEVICE):
         """
         obj_dof: DoF of the object, The max number is 6, It's the DoF for the rigid body, not including any joints within the object.
         obj_joint_dim: It's the DoF of the joints within the object, excluding those are rigid body DoF.
@@ -526,7 +527,7 @@ class AllegroContactProblem(AllegroObjectProblem):
                  obj_dof_code: list[int] = [0, 0, 0, 0, 0, 0],
                  obj_joint_dim: int = 0,
                  collision_checking: bool = False,
-                 device='cuda:0'):
+                 device=HYDRAX_DEVICE):
         # object_location is different from object_asset_pos. object_asset_pos is
         # used for pytorch volumetric. The asset of valve might contain something else such as a wall, a table
         # object_location is the location of the object joint, which is what we care for motion planning
@@ -867,11 +868,11 @@ class AllegroManipEnv(ScrewDriverRotateTask):
                  task_cfg: dict, cfg: AllegroManipEnvCfg,
                  xml_path=epath.Path(
                      ROOT) / "models" / "allegro_xela" / "scene_allegro_xela_right_rotate_cuboid.xml",
-                 warp_enabled: bool = False,
-                 device: str = 'cuda:0') -> None:
+                 backend_type: BackendType = BackendType.MJX,
+                 device: str = HYDRAX_DEVICE) -> None:
         """Load the MuJoCo model and set task parameters."""
 
-        super().__init__(name, warp_enabled, xml_path)
+        super().__init__(name, backend_type, xml_path)
 
         # Config
         self.task_cfg = task_cfg

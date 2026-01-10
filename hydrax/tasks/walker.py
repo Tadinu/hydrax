@@ -1,9 +1,11 @@
+from typing import Optional, Union
 import jax
 import jax.numpy as jnp
 import mujoco as mj
 from mujoco import mjx
+import mujoco_warp as mjw
 
-from hydrax import ROOT
+from hydrax import ROOT, BackendType
 from hydrax.task_base import Task
 
 
@@ -33,28 +35,29 @@ class Walker(Task):
         self.target_velocity = 1.5
         self.target_height = 1.2
 
-    def _get_torso_height(self, state: mjx.Data) -> jax.Array:
+    def _get_torso_height(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Get the height of the torso above the ground."""
         sensor_adr = self.mjx_model.sensor_adr[self.torso_position_sensor]
         return state.sensordata[sensor_adr + 2]  # px, py, pz
 
-    def _get_torso_velocity(self, state: mjx.Data) -> jax.Array:
+    def _get_torso_velocity(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Get the horizontal velocity of the torso."""
         sensor_adr = self.mjx_model.sensor_adr[self.torso_velocity_sensor]
         return state.sensordata[sensor_adr]
 
-    def _get_torso_deviation_from_upright(self, state: mjx.Data) -> jax.Array:
+    def _get_torso_deviation_from_upright(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """Get the deviation of the torso from the upright position."""
         sensor_adr = self.mjx_model.sensor_adr[self.torso_zaxis_sensor]
         return state.sensordata[sensor_adr + 2] - 1.0
 
-    def running_cost(self, state: mjx.Data, control: jax.Array) -> jax.Array:
+    def running_cost(self, state: Union[mjx.Data, mjw.Data], control: jax.Array,
+                     batch_idx: Optional[int] = -1) -> jax.Array:
         """The running cost ℓ(xₜ, uₜ)."""
         state_cost = self.terminal_cost(state)
         control_cost = jnp.sum(jnp.square(control))
         return state_cost + 0.1 * control_cost
 
-    def terminal_cost(self, state: mjx.Data) -> jax.Array:
+    def terminal_cost(self, state: Union[mjx.Data, mjw.Data]) -> jax.Array:
         """The terminal cost ϕ(x_T)."""
         height_cost = jnp.square(
             self._get_torso_height(state) - self.target_height

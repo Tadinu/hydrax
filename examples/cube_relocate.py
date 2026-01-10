@@ -1,8 +1,10 @@
 import argparse
 
 import mujoco as mj
-
 from evosax.algorithms.distribution_based import Sep_CMA_ES
+
+# hydrax
+from hydrax import BackendType
 from hydrax.algs import CEM, ICEM, MPPI, Evosax, PredictiveSampling
 from hydrax.simulation.deterministic import run_interactive
 from hydrax.tasks.cube_relocate_task import CubeRelocateTask
@@ -15,7 +17,7 @@ Double click on the floating target cube, then change the goal orientation with
 """
 
 # Define the task (cost and dynamics)
-task = CubeRelocateTask(name="Cube Relocate", warp_enabled=True)
+task = CubeRelocateTask(name="Cube Relocate", backend_type=BackendType.MJX_WARP)
 
 # Parse command-line arguments
 parser = argparse.ArgumentParser(

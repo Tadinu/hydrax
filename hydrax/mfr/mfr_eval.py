@@ -3,13 +3,13 @@ import time
 import os
 
 from evosax.algorithms.distribution_based import Sep_CMA_ES
+from xvfbwrapper import Xvfb
 
 import mujoco as mj
 import mujoco.viewer
-import numpy as np
 
 # hydrax
-from hydrax import ROOT
+from hydrax import ROOT, BackendType
 from hydrax.utils.video import VideoRecorder
 from hydrax.algs import CEM, ICEM, MPPI, Evosax, PredictiveSampling
 from hydrax.mfr.mfr_planner import MFRPlanner, get_task
@@ -140,8 +140,9 @@ def main(frequency: float = 25, fixed_camera_id: int = None, headless: bool = MF
     if headless:
         os.environ["MUJOCO_GL"] = "egl"
         os.environ["PYOPENGL_PLATFORM"] = "egl"
-        os.environ[
-            "DISPLAY"] = ":0.0"  # NOTE: Run `Xvfb :0.0 -screen 0 720x480x24` on another terminal window beforehand!
+        assert os.environ["DISPLAY"] is not None, "Xvfb is required to start in advance!\n"
+        "Please use xvfbwrapper. DON'T RUN: `Xvfb :<no> -screen 0 720x480x24` DIRECTLY!"
+        assert record_video, "Video recording should be enabled in headless mode!"
 
     # Report the planning horizon in seconds for debugging
     # Figure out how many sim steps to run before replanning
@@ -237,4 +238,6 @@ def main(frequency: float = 25, fixed_camera_id: int = None, headless: bool = MF
 
 
 if __name__ == "__main__":
-    main()
+    with Xvfb(width=1920, height=1080) as xvfb:
+        print(f"Using Xvfb display: {xvfb.new_display}")
+        main()
