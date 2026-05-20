@@ -21,7 +21,7 @@ from hydrax import BackendType
 from hydrax.utils.video import VideoRecorder
 
 # mjmanip
-from mjmanip.utils import mj_step
+from mjmanip.mj_utils import mj_step
 
 DATA_COLLECTION = False
 if DATA_COLLECTION:
@@ -63,8 +63,8 @@ class Task(ABC):
             obj_name: Optional[str] = None,
             keyframe: Optional[str] = None,
             trace_sites: Optional[Sequence[str]] = None,
-            backend_type: Optional[BackendType] = BackendType.MJX
-        impl: str = "warp",
+            backend_type: Optional[BackendType] = BackendType.MJX,
+            impl: str = "warp",
     ) -> None:
         """Set the model and simulation parameters.
 
@@ -82,13 +82,14 @@ class Task(ABC):
         self.name: str = name
         self._mj_model: mj.MjModel = None
         self._mj_data: mj.MjData = None
-        self.warp_enabled = (impl == 'warp')
         self._mjx_model: mjx.Model = None
         self._mjw_model: mjw.Model = None
         self._xml_path: str = ""
         self._mj_viewer: mj.viewer.Handle = None
         self._mj_renderer: mj.Renderer = None
         self._mj_recorder: VideoRecorder = None
+        self.warp_enabled = (impl == 'warp')
+        self._backend_impl: str = impl
         if not hasattr(self, "sim_dt"):
             self.sim_dt: float = sim_dt
         if not hasattr(self, "ctrl_dt"):
@@ -137,7 +138,8 @@ class Task(ABC):
 
         # MJX-Model
         # NOTE: Only create [mjx-model] here, [mjx-data] is dynamically made/updated at each rollout
-        self._mjx_model = mjx.put_model(self._mj_model, impl=impl) if (self.backend_type == BackendType.MJX or self.backend_type == BackendType.MJX_WARP) else None
+        self._mjx_model = mjx.put_model(self._mj_model, impl=self._backend_impl) \
+            if (self.backend_type == BackendType.MJX or self.backend_type == BackendType.MJX_WARP) else None
         self._mjw_model = mjw.put_model(self.mj_model) if (self.backend_type == BackendType.MJW) else None
         self._mjw_data: mjw.Data = None
         self._mjw_step_graph = None
@@ -215,8 +217,8 @@ class Task(ABC):
         return self._mjx_model
 
     @property
-    def mjx_impl(self) -> Optional[str]:
-        return self._mjx_model.impl.value if self._mjx_model else None
+    def backend_impl(self) -> Optional[str]:
+        return self._mjx_model.impl.value if self._mjx_model else self._backend_impl
 
     @property  # -> Consistent with co-parent [mjx_env.MjxEnv]
     def mjw_model(self) -> mjw.Model:
@@ -435,6 +437,8 @@ class Task(ABC):
     def unset_ep_meta(self):
         """
         Unset episode meta data
+        """
+        self._ep_meta = None
 
     def make_data(self, **kwargs) -> mjx.Data:
         """Create a new state consistent with this task.
@@ -455,4 +459,4 @@ class Task(ABC):
         Returns:
             A new `mjx.Data` instance for this task.
         """
-        return mjx.make_data(self.mj_model, impl=self.model.impl, **kwargs)
+        return mjx.make_data(self.mj_model, impl=self.mjx_model.impl, **kwargs)
