@@ -86,18 +86,19 @@ def run_interactive(  # noqa: PLR0912, PLR0915
     )
 
     # Create a data structure for the controller to run rollouts from.
-    mjx_data = controller.task.make_data()
+    mjx_data = None
     mjw_data = None
-    if backend_type == BackendType.MJX_WARP:
-    else:
+    if controller.task.backend_type == BackendType.MJW:
         mjw_data = mjw.put_data(mj_model, mj_data, nworld=controller.num_samples, njmax=300)
+    else:
+        mjx_data = controller.task.make_data(naconmax=100 * 8192, njmax=300)
 
     if mjx_data:
         mjx_data = mjx_data.replace(
-        qpos=mj_data.qpos,
-        qvel=mj_data.qvel,
-        mocap_pos=mj_data.mocap_pos,
-        mocap_quat=mj_data.mocap_quat,
+            qpos=mj_data.qpos,
+            qvel=mj_data.qvel,
+            mocap_pos=mj_data.mocap_pos,
+            mocap_quat=mj_data.mocap_quat,
         )
     else:
         mjw_data.mocap_pos.assign(wp.array(mj_data.mocap_pos))

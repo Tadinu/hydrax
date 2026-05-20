@@ -25,10 +25,10 @@ from hydrax.task_base import Task
 # mjmanip
 from mjmanip.robot.leap_mjx import LeapMjx
 from mjmanip.robot.leap_fabrics import LeapWithFabrics, HAND_XML_PATH
-from mjmanip.utils import mj_get_joints_qids
+from mjmanip.mj_utils import mj_model_joints_qids
 from mjmanip.control.fabrics.fabrics.arm_hand_pose_fabric import ArmHandPoseFabricConfig
 from mjmanip.control.fabrics.fabrics_controller import FabricsController
-from mjmanip.robot.leap_fabrics import LEAP_FABRIC_PALM_CONTROL_FRAME_NAMES, \
+from mjmanip.robot.leap_fabrics import LEAP_FABRIC_HAND_BASE_CONTROL_FRAME_NAMES, \
     LEAP_FABRIC_FINGER_CONTROL_FRAME_NAMES
 
 HAND_BASE_POSE = [np.array([-0.25, 0.0, 0.25]), np.array([0.0, 1.0, 0.0, 0.0])]
@@ -50,7 +50,7 @@ class RelocatePhase(IntEnum):
 class MugRelocateTask(Task):
     """Mug rotation with the LEAP hand."""
 
-    PALM_FABRIC_CONTROL_FRAMES = LEAP_FABRIC_PALM_CONTROL_FRAME_NAMES
+    HAND_BASE_FABRIC_CONTROL_FRAMES = LEAP_FABRIC_HAND_BASE_CONTROL_FRAME_NAMES
     FINGER_FABRIC_CONTROL_FRAMES = LEAP_FABRIC_FINGER_CONTROL_FRAME_NAMES
 
     def get_assets(self) -> Dict[str, bytes]:
@@ -132,15 +132,15 @@ class MugRelocateTask(Task):
         self.fabrics_robot = LeapWithFabrics()
         self.fabrics_robot.main_model = self.mj_model
         self.fabrics_robot.main_data = self.mj_data
-        self.fabrics_robot.robot_qpos_ids = mj_get_joints_qids(self.mj_model, LeapWithFabrics.JOINTS_NAMES,
-                                                               is_qpos=True)
+        self.fabrics_robot.robot_qpos_ids = mj_model_joints_qids(self.mj_model, LeapWithFabrics.JOINTS_NAMES,
+                                                                 is_qpos=True)
         # NOTE: MjData is created here-in if needed in robot's configuration
         self.fabrics_controller = FabricsController(robot=self.fabrics_robot,
-                                                    palm_control_frames=self.PALM_FABRIC_CONTROL_FRAMES,
+                                                    hand_base_control_frames=self.HAND_BASE_FABRIC_CONTROL_FRAMES,
                                                     finger_control_frames=self.FINGER_FABRIC_CONTROL_FRAMES,
                                                     fabric_cfg=self.fabric_cfg,
                                                     object_model_paths=LeapWithFabrics.OBJECT_MODEL_PATHS,
-                                                    object_collision_mesh_names=LeapWithFabrics.OBJECT_COLLISION_MESH_NAMES,
+                                                    object_collision_geom_names=LeapWithFabrics.OBJECT_COLLISION_GEOM_NAMES,
                                                     robot_path_or_xml=HAND_XML_PATH,
                                                     env_world_file_name=self.FABRIC_ENV_WORLD_FILE_NAME,
                                                     use_finger_fabrics=False,

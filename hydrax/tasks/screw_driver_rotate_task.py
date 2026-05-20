@@ -18,7 +18,7 @@ from hydrax import ROOT, BackendType
 from hydrax.task_base import Task
 
 # mjmanip
-from mjmanip.utils import mj_body_qids
+from mjmanip.mj_utils import mj_body_qids
 
 
 class ScrewDriverRotateTask(Task):

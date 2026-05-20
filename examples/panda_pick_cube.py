@@ -12,7 +12,7 @@ from evosax.algorithms.distribution_based import Sep_CMA_ES
 
 # Hydrax
 from hydrax import ROOT, BackendType
-from hydrax.algs import CEM, ICEM, MPPI, Evosax, PredictiveSampling, DIAL
+from hydrax.algs import CEM, ICEM, MPPI, Evosax, PredictiveSampling, DIAL, MTP
 from hydrax.simulation.asynchronous import run_interactive as async_run_interactive
 from hydrax.simulation.deterministic import run_interactive as sync_run_interactive
 # from hydrax.tasks.panda.panda_open_cabinet_env import PandaOpenCabinetEnv
@@ -118,6 +118,23 @@ def main(record_video: bool = False) -> None:
             spline_type="zero",
             num_knots=4,
             iterations=1
+        )
+    elif args.algorithm == "mtp":
+        print("Running MTP")
+        ctrl = MTP(
+            task,
+            num_samples=128,
+            m_pts=4,
+            num_elites=5,
+            sigma_start=0.5,
+            sigma_min=0.5,
+            sigma_max=1.0,
+            beta=1.0,
+            alpha=0.1,
+            mtp_interpolation="akima",
+            plan_horizon=1.0,
+            spline_type="zero",
+            num_knots=4,
         )
     elif args.algorithm == "cmaes":
         print("Running CMA-ES")

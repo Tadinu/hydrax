@@ -18,11 +18,12 @@ import mujoco_warp as mjw
 from mujoco_playground._src import mjx_env
 
 import mink
-from mjmanip.utils import mj_add_mocap_body, mj_get_joints_qids, mj_get_mocap_pose, mj_set_body_tree_collision_enabled
+from mjmanip.mj_utils import MjPose, mj_spec_add_mocap_body, mj_model_joints_qids, mj_data_mocap_pose, \
+    mj_spec_set_body_tree_collision_enabled
 from mjmanip.mjx_utils import mjx_mulPose
 from mjmanip.control.fabrics.fabrics.arm_hand_pose_fabric import ArmHandPoseFabricConfig
 from mjmanip.control.fabrics.fabrics_controller import FabricsController
-from mjmanip.robot.panda_leap_fabrics import (PANDA_LEAP_FABRIC_PALM_CONTROL_FRAME_NAMES,
+from mjmanip.robot.panda_leap_fabrics import (PANDA_LEAP_FABRIC_HAND_BASE_CONTROL_FRAME_NAMES,
                                               PANDA_LEAP_FABRIC_FINGER_CONTROL_FRAME_NAMES)
 
 # hydrax
@@ -201,16 +202,16 @@ class PandaLeap:
     ACTS_NO = ACTUATED_JOINTS_NO
 
     # OBJECTS
-    OBJECT_NAMES: list[str] = ['cube']  # ['mug']
+    OBJECT_NAMES: list[str] = ['mug']  # ['mug']
     OBJECT_MODEL_PATHS: dict[str, str] = {
         # 'cube': f"{MODELS_DIR}/cube/reorientation_cube.xml",
-        # 'mug': f"{MODELS_DIR}/objects/mug/mug.xml",
+        'mug': f"{MODELS_DIR}/objects/mug/mug.xml",
     }
     OBJECT_INIT_POSES: dict[str, np.ndarray] = {
         obj_name: np.hstack([np.array([0, 0.5, 0.01]), IDENTITY_WXYZ])
         for obj_name in OBJECT_NAMES
     }
-    OBJECT_COLLISION_MESH_NAMES: dict[str, list[str]] = {
+    OBJECT_COLLISION_GEOM_NAMES: dict[str, list[str]] = {
         OBJECT_NAMES[0]: []
     }
 
@@ -325,9 +326,9 @@ class PandaLeap:
         ]
 
     def update_tasks(self) -> None:
-        self._update_task_ee()
+        self._update_task_ees()
 
-    def _update_task_ee(self) -> None:
+    def _update_task_ees(self) -> None:
         # Update kuka end-effector task, as [target]'s SE3
         T_wt = mink.SE3.from_mocap_name(
             self.mj_model, self.data, self.EE_TARGET_MOCAP_NAME
@@ -368,11 +369,10 @@ class PandaLeap:
         return self.main_data.qpos.copy()
 
     def get_ee_target_mocap_pose(self) -> np.ndarray:
-        ee_target_mocap_pose = mj_get_mocap_pose(self.main_data, self.EE_TARGET_MOCAP_NAME)
-        ee_target_mocap_pose = np.concatenate([ee_target_mocap_pose[0], ee_target_mocap_pose[1]])
+        ee_target_mocap_pose = mj_data_mocap_pose(self.main_data, self.EE_TARGET_MOCAP_NAME)
         # NOTE: This is unclear why incorrect (at least during the first steps after model building)!
         # bku_ee_target_mocap_pose = np.concatenate([self.ee_target_mocap.xpos, self.ee_target_mocap.xquat])
-        return ee_target_mocap_pose
+        return ee_target_mocap_pose.data
 
 
 _ARM_DIR = "panda"
@@ -382,7 +382,7 @@ _GRIPPER_DIR = "leap_hand"
 class PandaLeapEnv(PandaBaseEnv):
     """Base environment for Franka Emika Panda and Leap hand."""
 
-    PALM_FABRIC_CONTROL_FRAMES = PANDA_LEAP_FABRIC_PALM_CONTROL_FRAME_NAMES
+    HAND_BASE_FABRIC_CONTROL_FRAMES = PANDA_LEAP_FABRIC_HAND_BASE_CONTROL_FRAME_NAMES
     FINGER_FABRIC_CONTROL_FRAMES = PANDA_LEAP_FABRIC_FINGER_CONTROL_FRAME_NAMES
 
     def get_assets(self) -> Dict[str, bytes]:
@@ -458,10 +458,10 @@ class PandaLeapEnv(PandaBaseEnv):
         self.fabric_cfg: ArmHandPoseFabricConfig = fabric_cfg
 
         # FABRICS
-        FULL_HAND_FABRICS_JOINTS_NAMES = [f"{PandaLeap.HAND_MODEL_NAME}/{_}" for _ in
-                                          PandaLeap.HAND_FABRICS_JOINTS_NAMES]
-        FULL_HAND_FABRICS_BODIES_NAMES = [f"{PandaLeap.HAND_MODEL_NAME}/{_}" for _ in
-                                          PandaLeap.HAND_BODIES_NAMES]
+        FULL_HAND_FABRICS_JOINTS_NAMES = [f"{PandaLeap.HAND_MODEL_NAME}/{_}"
+                                          for _ in PandaLeap.HAND_FABRICS_JOINTS_NAMES]
+        FULL_HAND_FABRICS_BODIES_NAMES = [f"{PandaLeap.HAND_MODEL_NAME}/{_}"
+                                          for _ in PandaLeap.HAND_BODIES_NAMES]
         PandaLeap.FABRICS_JOINTS_NAMES = PandaLeap.ARM_FABRICS_JOINTS_NAMES + FULL_HAND_FABRICS_JOINTS_NAMES
         PandaLeap.FABRICS_BODIES_NAMES = PandaLeap.ARM_BODIES_NAMES + FULL_HAND_FABRICS_BODIES_NAMES
 
@@ -554,7 +554,7 @@ class PandaLeapEnv(PandaBaseEnv):
         PandaLeap.ARM_BODIES_NAMES = [body.name for body in self.arm_spec.bodies if body.name != self._obj_name]
         # Disable arm's bodies collision
         # NOTE: This may disrupt already-setup collision from XML
-        # mj_set_body_tree_collision_enabled(self.arm_spec.bodies[1], False)
+        # mj_spec_set_body_tree_collision_enabled(self.arm_spec.bodies[1], False)
 
         # Name arm's body geoms
         # Enabled [gravcomp]
@@ -605,7 +605,7 @@ class PandaLeapEnv(PandaBaseEnv):
         """
 
         # EE Target mocap body (under [arm_spec]'s worldbody)
-        mj_add_mocap_body(
+        mj_spec_add_mocap_body(
             world_spec=self.arm_spec,
             # target_body_spec=self.hand_base_spec,
             mocap_name=PandaLeap.EE_TARGET_MOCAP_NAME,
@@ -621,7 +621,7 @@ class PandaLeapEnv(PandaBaseEnv):
 
         # Add finger mocaps
         for fingertip in PandaLeap.FINGER_TIPS:
-            mj_add_mocap_body(
+            mj_spec_add_mocap_body(
                 world_spec=self.arm_spec,
                 # target_body_spec=self.hand_base_spec,
                 mocap_name=f"{fingertip}_target",
@@ -759,14 +759,14 @@ class PandaLeapEnv(PandaBaseEnv):
         self.fabrics_robot = PandaLeap()
         self.fabrics_robot.main_model = self.mj_model
         self.fabrics_robot.main_data = self.mj_data
-        self.fabrics_robot.robot_qpos_ids = mj_get_joints_qids(self.mj_model, PandaLeap.JOINTS_NAMES, is_qpos=True)
+        self.fabrics_robot.robot_qpos_ids = mj_model_joints_qids(self.mj_model, PandaLeap.JOINTS_NAMES, is_qpos=True)
         # NOTE: MjData is created here-in if needed in robot's configuration
         self.fabrics_controller = FabricsController(robot=self.fabrics_robot,
-                                                    palm_control_frames=self.PALM_FABRIC_CONTROL_FRAMES,
+                                                    hand_base_control_frames=self.HAND_BASE_FABRIC_CONTROL_FRAMES,
                                                     finger_control_frames=self.FINGER_FABRIC_CONTROL_FRAMES,
                                                     fabric_cfg=self.fabric_cfg,
                                                     object_model_paths=self.fabrics_robot.OBJECT_MODEL_PATHS,
-                                                    object_collision_mesh_names=self.fabrics_robot.OBJECT_COLLISION_MESH_NAMES,
+                                                    object_collision_geom_names=self.fabrics_robot.OBJECT_COLLISION_GEOM_NAMES,
                                                     robot_path_or_xml=self.main_robots_system_xml(),
                                                     env_world_file_name=self.FABRIC_ENV_WORLD_FILE_NAME,
                                                     use_finger_fabrics=False,

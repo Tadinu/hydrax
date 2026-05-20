@@ -144,7 +144,7 @@ class PandaPickEnv(PandaLeapEnv):
                 obj = self.mj_data.body(self._obj_name)
                 DEFAULT_WXYZ = np.array([0., 1., 0., 0.])
                 ee_pose = np.concatenate([obj.xpos, DEFAULT_WXYZ])
-            self.ref_qpos = self.diff_ik.plan(task_ee_pose=np.asarray(ee_pose))
+            self.ref_qpos = self.diff_ik.plan(target_ee_poses={self.diff_ik.main_ee_name: np.asarray(ee_pose)})
 
     def reset(self, rng: jax.Array) -> State:
         rng, rng_box, rng_target = jax.random.split(rng, 3)
