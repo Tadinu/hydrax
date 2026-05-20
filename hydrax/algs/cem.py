@@ -5,7 +5,6 @@ import jax.numpy as jnp
 from flax.struct import dataclass
 
 from mujoco import mjx
-import mujoco_warp as mjw
 
 from hydrax.alg_base import SamplingBasedController, SamplingParams, Trajectory
 from hydrax.risk import RiskStrategy

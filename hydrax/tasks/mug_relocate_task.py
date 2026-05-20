@@ -25,10 +25,10 @@ from hydrax.task_base import Task
 # mjmanip
 from mjmanip.robot.leap_mjx import LeapMjx
 from mjmanip.robot.leap_fabrics import LeapWithFabrics, HAND_XML_PATH
-from mjmanip.utils import mj_get_joints_qids
+from mjmanip.mj_utils import mj_model_joints_qids
 from mjmanip.control.fabrics.fabrics.arm_hand_pose_fabric import ArmHandPoseFabricConfig
 from mjmanip.control.fabrics.fabrics_controller import FabricsController
-from mjmanip.robot.leap_fabrics import LEAP_FABRIC_PALM_CONTROL_FRAME_NAMES, \
+from mjmanip.robot.leap_fabrics import LEAP_FABRIC_HAND_BASE_CONTROL_FRAME_NAMES, \
     LEAP_FABRIC_FINGER_CONTROL_FRAME_NAMES
 
 HAND_BASE_POSE = [np.array([-0.25, 0.0, 0.25]), np.array([0.0, 1.0, 0.0, 0.0])]
@@ -50,7 +50,7 @@ class RelocatePhase(IntEnum):
 class MugRelocateTask(Task):
     """Mug rotation with the LEAP hand."""
 
-    PALM_FABRIC_CONTROL_FRAMES = LEAP_FABRIC_PALM_CONTROL_FRAME_NAMES
+    HAND_BASE_FABRIC_CONTROL_FRAMES = LEAP_FABRIC_HAND_BASE_CONTROL_FRAME_NAMES
     FINGER_FABRIC_CONTROL_FRAMES = LEAP_FABRIC_FINGER_CONTROL_FRAME_NAMES
 
     def get_assets(self) -> Dict[str, bytes]:
@@ -66,7 +66,7 @@ class MugRelocateTask(Task):
         return assets
 
     def __init__(self, name: str,
-                 fabric_cfg: Optional[ArmHandPoseFabricConfig] = None,
+                 fabrics_cfg: Optional[ArmHandPoseFabricConfig] = None,
                  use_ctrl_callback: bool = False,
                  backend_type: BackendType = BackendType.MJX) -> None:
         """Load the MuJoCo model and set task parameters."""
@@ -76,9 +76,9 @@ class MugRelocateTask(Task):
 
         # Fabrics
         self.fabrics_controller: FabricsController = None
-        self.fabric_cfg: ArmHandPoseFabricConfig = fabric_cfg
+        self.fabrics_cfg: ArmHandPoseFabricConfig = fabrics_cfg
         self.ctrl_callback = self.mjx_fabrics_convert_free_hand_to_full_arm_hand_ctrl \
-            if use_ctrl_callback and fabric_cfg else None
+            if use_ctrl_callback and fabrics_cfg else None
 
         super().__init__(name,
                          xml_path=epath.Path(ROOT) / "models" / "leap_hand" / "scene_leap_rh_mjx_relocate_mug.xml",
@@ -125,23 +125,23 @@ class MugRelocateTask(Task):
         self._init_hand()
 
         # Fabrics
-        if self.fabric_cfg is not None:
+        if self.fabrics_cfg is not None:
             self._init_fabrics()
 
     def _init_fabrics(self):
         self.fabrics_robot = LeapWithFabrics()
         self.fabrics_robot.main_model = self.mj_model
         self.fabrics_robot.main_data = self.mj_data
-        self.fabrics_robot.robot_qpos_ids = mj_get_joints_qids(self.mj_model, LeapWithFabrics.JOINTS_NAMES,
-                                                               is_qpos=True)
+        self.fabrics_robot.robot_qpos_ids = mj_model_joints_qids(self.mj_model, LeapWithFabrics.JOINTS_NAMES,
+                                                                 is_qpos=True)
         # NOTE: MjData is created here-in if needed in robot's configuration
         self.fabrics_controller = FabricsController(robot=self.fabrics_robot,
-                                                    palm_control_frames=self.PALM_FABRIC_CONTROL_FRAMES,
+                                                    hand_base_control_frames=self.HAND_BASE_FABRIC_CONTROL_FRAMES,
                                                     finger_control_frames=self.FINGER_FABRIC_CONTROL_FRAMES,
-                                                    fabric_cfg=self.fabric_cfg,
+                                                    fabrics_cfg=self.fabrics_cfg,
                                                     object_model_paths=LeapWithFabrics.OBJECT_MODEL_PATHS,
-                                                    object_collision_mesh_names=LeapWithFabrics.OBJECT_COLLISION_MESH_NAMES,
-                                                    robot_path_or_xml=HAND_XML_PATH,
+                                                    object_collision_geom_names=LeapWithFabrics.OBJECT_COLLISION_GEOM_NAMES,
+                                                    robot_urdf_or_xml=HAND_XML_PATH,
                                                     env_world_file_name=self.FABRIC_ENV_WORLD_FILE_NAME,
                                                     use_finger_fabrics=False,
                                                     use_cuda_graph=True,

@@ -18,7 +18,7 @@ CACHE_DIR = f"{ROOT}/.tmp/warp_cache"
 
 # Set XLA flags for better performance
 # https://docs.jax.dev/en/latest/gpu_performance_tips.html#xla-performance-flags
-os.environ["XLA_FLAGS"] = "--xla_gpu_triton_gemm_any=true "
+os.environ["XLA_FLAGS"] = "--xla_gpu_triton_gemm_any=true"
 
 # Enable persistent compilation cache
 jax.config.update("jax_compilation_cache_dir", f"{ROOT}/.tmp/jax_cache")
@@ -34,12 +34,15 @@ class BackendType(enum.IntEnum):
 if "CUDA_VISIBLE_DEVICES" in os.environ:
     print("Hydrax CUDA_VISIBLE_DEVICES:", os.environ["CUDA_VISIBLE_DEVICES"])
 HYDRAX_DEVICE_INT = 0
-HYDRAX_DEVICE = f"cuda:{HYDRAX_DEVICE_INT}"
 
 # Torch
 import torch
 
-torch.set_default_device(HYDRAX_DEVICE)
+if torch.get_default_device() == torch.device('cpu'):
+    HYDRAX_DEVICE = 'cpu'
+else:
+    HYDRAX_DEVICE = f"cuda:{HYDRAX_DEVICE_INT}"
+    torch.set_default_device(HYDRAX_DEVICE)
 a = torch.zeros(4, device=HYDRAX_DEVICE)
 torch.set_printoptions(precision=4)
 print("HYDRAX", a)

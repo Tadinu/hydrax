@@ -53,27 +53,27 @@ class MTP(SamplingBasedController):
     """
 
     def __init__(
-        self,
-        task: Task,
-        num_samples: int,
-        m_pts: int = 3,
-        n_per_layer: int = 50,
-        degree: int = 2,
-        num_elites: int = 5,
-        sigma_start: float = 0.5,
-        sigma_min: float = 0.1,
-        sigma_max: float = 1.0,
-        temperature: float = 0.1,
-        beta: float = 0.1,
-        alpha: float = 0.5,
-        mtp_interpolation: MTPInterpolationType = "akima",
-        num_randomizations: int = 1,
-        risk_strategy: Optional[RiskStrategy] = None,
-        seed: int = 0,
-        plan_horizon: float = 1.0,
-        spline_type: Literal["zero", "linear", "cubic"] = "zero",
-        num_knots: int = 4,
-        iterations: int = 1,
+            self,
+            task: Task,
+            num_samples: int,
+            m_pts: int = 3,
+            n_per_layer: int = 50,
+            degree: int = 2,
+            num_elites: int = 5,
+            sigma_start: float = 0.5,
+            sigma_min: float = 0.1,
+            sigma_max: float = 1.0,
+            temperature: float = 0.1,
+            beta: float = 0.1,
+            alpha: float = 0.5,
+            mtp_interpolation: MTPInterpolationType = "akima",
+            num_randomizations: int = 1,
+            risk_strategy: Optional[RiskStrategy] = None,
+            seed: int = 0,
+            plan_horizon: float = 1.0,
+            spline_type: Literal["zero", "linear", "cubic"] = "zero",
+            num_knots: int = 4,
+            iterations: int = 1,
     ) -> None:
         """Initialise the controller.
 
@@ -129,6 +129,7 @@ class MTP(SamplingBasedController):
 
         super().__init__(
             task,
+            num_samples=num_samples,
             num_randomizations=num_randomizations,
             risk_strategy=risk_strategy,
             seed=seed,
@@ -176,11 +177,11 @@ class MTP(SamplingBasedController):
             self._linmat = jnp.ones((num_knots, 1))
 
     def init_params(
-        self, initial_knots: Optional[jax.Array] = None, seed: int = 0
+            self, initial_knots: Optional[jax.Array] = None, seed: int = 0
     ) -> MTPParams:
         """Initialise the policy parameters."""
         _params = super().init_params(initial_knots, seed)
-        cov = jnp.full_like(_params.mean, self.sigma_start**2)
+        cov = jnp.full_like(_params.mean, self.sigma_start ** 2)
         best_knots = jnp.zeros_like(_params.mean)
         return MTPParams(
             tk=_params.tk,
@@ -191,12 +192,12 @@ class MTP(SamplingBasedController):
         )
 
     def optimize(
-        self, state: mjx.Data, params: MTPParams
+            self, state: mjx.Data, params: MTPParams
     ) -> Tuple[MTPParams, Trajectory]:
         """Optimise, warm-starting both ``mean`` and ``best_knots``."""
         tk = params.tk
         new_tk = (
-            jnp.linspace(0.0, self.plan_horizon, self.num_knots) + state.time
+                jnp.linspace(0.0, self.plan_horizon, self.num_knots) + state.time
         )
         clamped_tk = jnp.clip(new_tk, tk[0], tk[-1])
         new_best = self.interp_func(
@@ -229,7 +230,7 @@ class MTP(SamplingBasedController):
         of the current mean.
         """
         rng = params.rng
-        nu = self.task.model.nu
+        nu = self.task.mj_model.nu
         best = params.best_knots[None, ...]  # (1, num_knots, nu)
 
         if self.mtp_samples >= 1:
@@ -270,7 +271,7 @@ class MTP(SamplingBasedController):
         return all_knots, params.replace(rng=rng)
 
     def update_params(
-        self, params: MTPParams, rollouts: Trajectory
+            self, params: MTPParams, rollouts: Trajectory
     ) -> MTPParams:
         """Refit the local Gaussian with weighted elite statistics."""
         costs = jnp.sum(rollouts.costs, axis=1)  # (num_samples,)
@@ -289,13 +290,13 @@ class MTP(SamplingBasedController):
         var = jnp.sum(
             weights[:, None, None] * (elite_knots - mean) ** 2, axis=0
         )
-        bessel = 1.0 / jnp.maximum(1.0 - jnp.sum(weights**2), 1e-6)
+        bessel = 1.0 / jnp.maximum(1.0 - jnp.sum(weights ** 2), 1e-6)
         cov = var * bessel
 
         # Momentum smoothing: convex blend of old and new variance.
         mean = mean + self.alpha * (params.mean - mean)
         cov = self.alpha * params.cov + (1.0 - self.alpha) * cov
-        cov = jnp.clip(cov, self.sigma_min**2, self.sigma_max**2)
+        cov = jnp.clip(cov, self.sigma_min ** 2, self.sigma_max ** 2)
 
         best_knots = rollouts.knots[elite_idx[0]]
         return params.replace(mean=mean, cov=cov, best_knots=best_knots)

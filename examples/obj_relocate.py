@@ -31,15 +31,15 @@ cs.store(name="leap_mujoco", node=ArmHandPoseFabricConfig)
 
 cfg_name = "leap_mujoco"
 
-fabric_cfg = None
+fabrics_cfg = None
 
 
 @hydra.main(version_base=None, config_path=FABRICS_CONFIGS_DIR, config_name=cfg_name)
 def fetch_fabric_config(cfg: DictConfig) -> None:
-    global fabric_cfg
-    fabric_cfg = OmegaConf.to_object(cfg)
-    assert isinstance(fabric_cfg, ArmHandPoseFabricConfig)
-    # print(OmegaConf.to_yaml(fabric_cfg))
+    global fabrics_cfg
+    fabrics_cfg = OmegaConf.to_object(cfg)
+    assert isinstance(fabrics_cfg, ArmHandPoseFabricConfig)
+    # print(OmegaConf.to_yaml(fabrics_cfg))
 
 
 # Asynchronous simulations must be wrapped in a __main__ block
@@ -54,7 +54,7 @@ if __name__ == "__main__":
     fetch_fabric_config()
     # Define the task (cost and dynamics)
     task = MugRelocateTask(name="Mug Relocate",
-                           fabric_cfg=fabric_cfg if use_ctrl_callback else None,
+                           fabrics_cfg=fabrics_cfg if use_ctrl_callback else None,
                            backend_type=BackendType.MJW)  # Not enough memory for Warp with mug mesh
 
     # Parse command-line arguments

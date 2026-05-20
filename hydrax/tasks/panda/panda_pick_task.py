@@ -28,8 +28,8 @@ from hydrax.tasks.panda.panda_leap_task import PandaLeapEnv, PandaLeap
 from hydrax import ROOT, BackendType
 
 # mjmanip
-from mjmanip.robot.arm_hand import ArmHandDiffIK
-from mjmanip.robot.arm_hand_mjx import ArmHandDiffIKMjx
+from mjmanip.robot.arm_hand_diffik import ArmHandDiffIK
+from mjmanip.robot.arm_hand_mjinx import ArmHandDiffIKMjinx
 from mjmanip.robot.panda_leap_mjx import PandaLeapMjx
 from mjmanip.control.fabrics.fabrics.arm_hand_pose_fabric import ArmHandPoseFabricConfig
 
@@ -68,7 +68,7 @@ class PandaPickEnv(PandaLeapEnv):
                  xml_path: Optional[epath.Path] = None,
                  obj_name: Optional[str] = None,
                  keyframe: Optional[str] = None,
-                 fabric_cfg: Optional[ArmHandPoseFabricConfig] = None,
+                 fabrics_cfg: Optional[ArmHandPoseFabricConfig] = None,
                  sample_orientation: bool = False,
                  use_ctrl_callback: bool = False,
                  backend_type: BackendType = BackendType.MJX):
@@ -76,11 +76,11 @@ class PandaPickEnv(PandaLeapEnv):
                          xml_path=xml_path,
                          obj_name=obj_name,
                          keyframe=keyframe,
-                         fabric_cfg=fabric_cfg,
+                         fabrics_cfg=fabrics_cfg,
                          use_ctrl_callback=use_ctrl_callback,
                          backend_type=backend_type)
         self._sample_orientation = sample_orientation
-        self.ctrl_callback = self.mjx_fabrics_convert_free_hand_to_full_arm_hand_ctrl if fabric_cfg \
+        self.ctrl_callback = self.mjx_fabrics_convert_free_hand_to_full_arm_hand_ctrl if fabrics_cfg \
             else self.mjx_convert_free_hand_to_full_arm_hand_ctrl
         self._init_ik()
 
@@ -122,16 +122,16 @@ class PandaPickEnv(PandaLeapEnv):
         PandaLeapMjx.HAND_MODEL_NAME = "leap_rh_mjx"
         PandaLeapMjx.NINSTANCES = 1
         PandaLeapMjx.init_class_default()
-        self.diff_ik_mjx = None
+        self.diff_ik_mjinx = None
         self.diff_ik = None
-        if self.use_ctrl_callback and not self.fabric_cfg:
-            use_diff_ik_mjx = False
-            if use_diff_ik_mjx:
-                self.diff_ik_mjx = ArmHandDiffIKMjx(model=self.mj_model, data=self.mj_data,
-                                                    world_class=PandaLeapMjx,
-                                                    q0=jnp.array(self.home_qpos),
-                                                    mjx_model=self.mjx_model)
-                self.diff_ik_mjx.init()
+        if self.use_ctrl_callback and not self.fabrics_cfg:
+            use_diff_ik_mjinx = False
+            if use_diff_ik_mjinx:
+                self.diff_ik_mjinx = ArmHandDiffIKMjinx(model=self.mj_model, data=self.mj_data,
+                                                        world_class=PandaLeapMjx,
+                                                        q0=jnp.array(self.home_qpos),
+                                                        mjx_model=self.mjx_model)
+                self.diff_ik_mjinx.init()
             else:
                 self.diff_ik = ArmHandDiffIK(model=self.mj_model, data=self.mj_data,
                                              world_class=PandaLeapMjx,
@@ -144,7 +144,7 @@ class PandaPickEnv(PandaLeapEnv):
                 obj = self.mj_data.body(self._obj_name)
                 DEFAULT_WXYZ = np.array([0., 1., 0., 0.])
                 ee_pose = np.concatenate([obj.xpos, DEFAULT_WXYZ])
-            self.ref_qpos = self.diff_ik.plan(task_ee_pose=np.asarray(ee_pose))
+            self.ref_qpos = self.diff_ik.plan(target_ee_poses={self.diff_ik.main_ee_name: np.asarray(ee_pose)})
 
     def reset(self, rng: jax.Array) -> State:
         rng, rng_box, rng_target = jax.random.split(rng, 3)
@@ -212,9 +212,9 @@ class PandaPickEnv(PandaLeapEnv):
         return state
 
     def step_callback(self, mjx_data: Union[mjx.Data, mjw.Data]):
-        if self.diff_ik_mjx:
-            self.diff_ik_mjx.update_tasks(ee_pose=jnp.concatenate([self._get_obj_position(mjx_data),
-                                                                   self._get_obj_orientation(mjx_data)]))
+        if self.diff_ik_mjinx:
+            self.diff_ik_mjinx.update_tasks(ee_pose=jnp.concatenate([self._get_obj_position(mjx_data),
+                                                                     self._get_obj_orientation(mjx_data)]))
 
     def step(self, state: State, action: jax.Array) -> State:
         delta = action * self._action_scale
