@@ -1,6 +1,7 @@
 from .cbo import CBO
 from .cem import CEM
 from .icem import ICEM
+from .pcem import PCEM
 from .dial import DIAL
 from .evosax import Evosax
 from .mppi import MPPI
@@ -12,6 +13,7 @@ __all__ = [
     "CBO",
     "CEM",
     "ICEM",
+    "PCEM",
     "MPPI",
     "MTP",
     "PredictiveSampling",

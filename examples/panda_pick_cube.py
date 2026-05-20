@@ -1,5 +1,6 @@
 import os
 import argparse
+from typing import Optional
 import hydra
 from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig, OmegaConf
@@ -12,7 +13,7 @@ from evosax.algorithms.distribution_based import Sep_CMA_ES
 
 # Hydrax
 from hydrax import ROOT, BackendType
-from hydrax.algs import CEM, ICEM, MPPI, Evosax, PredictiveSampling, DIAL
+from hydrax.algs import CEM, ICEM, PCEM, MPPI, Evosax, PredictiveSampling, DIAL, MTP
 from hydrax.simulation.asynchronous import run_interactive as async_run_interactive
 from hydrax.simulation.deterministic import run_interactive as sync_run_interactive
 # from hydrax.tasks.panda.panda_open_cabinet_env import PandaOpenCabinetEnv
@@ -33,7 +34,7 @@ fabric_cfg = None
 
 
 @hydra.main(version_base=None, config_path=FABRICS_CONFIGS_DIR, config_name=cfg_name)
-def fetch_fabric_config(cfg: DictConfig) -> None:
+def fetch_fabric_config(cfg: Optional[DictConfig] = None) -> None:
     global fabric_cfg
     fabric_cfg = OmegaConf.to_object(cfg)
     assert isinstance(fabric_cfg, ArmHandPoseFabricConfig)
@@ -48,7 +49,7 @@ def main(record_video: bool = False) -> None:
                         # NOTE: Fabrics currently is not working due to failed FFI call from JAX -> Warp
                         # fabric_cfg=fabric_cfg if use_ctrl_callback else None,
                         use_ctrl_callback=use_ctrl_callback,
-                        backend_type=BackendType.MJX_WARP)
+                        backend_type=BackendType.MJX)
 
     # Parse command-line arguments
     parser = argparse.ArgumentParser(
@@ -60,10 +61,11 @@ def main(record_video: bool = False) -> None:
     subparsers.add_parser("ps", help="Predictive Sampling")
     subparsers.add_parser("mppi", help="Model Predictive Path Integral Control")
     subparsers.add_parser("cem", help="Cross-Entropy Method")
+    subparsers.add_parser("pcem", help="Proximal Cross-Entropy Method")
     subparsers.add_parser("cmaes", help="CMA-ES")
     args = parser.parse_args()
 
-    args.algorithm = "cem"
+    args.algorithm = "pcem"
     # Set the controller based on command-line arguments
     if args.algorithm == "ps" or args.algorithm is None:
         print("Running predictive sampling")
@@ -103,6 +105,18 @@ def main(record_video: bool = False) -> None:
             # iterations=1,
             ctrl_callback=task.ctrl_callback if use_ctrl_callback else None
         )
+    elif args.algorithm == "pcem":
+        print("Running PCEM")
+        ctrl = PCEM(
+            task,
+            num_samples=512,
+            num_randomizations=8,
+            plan_horizon=0.25,
+            spline_type="zero",
+            num_knots=4,
+            # iterations=1,
+            ctrl_callback=task.ctrl_callback if use_ctrl_callback else None
+        )
     elif args.algorithm == "icem":
         print("Running ICEM")
         ctrl = ICEM(
@@ -118,6 +132,23 @@ def main(record_video: bool = False) -> None:
             spline_type="zero",
             num_knots=4,
             iterations=1
+        )
+    elif args.algorithm == "mtp":
+        print("Running MTP")
+        ctrl = MTP(
+            task,
+            num_samples=128,
+            m_pts=4,
+            num_elites=5,
+            sigma_start=0.5,
+            sigma_min=0.5,
+            sigma_max=1.0,
+            beta=1.0,
+            alpha=0.1,
+            mtp_interpolation="akima",
+            plan_horizon=1.0,
+            spline_type="zero",
+            num_knots=4,
         )
     elif args.algorithm == "cmaes":
         print("Running CMA-ES")

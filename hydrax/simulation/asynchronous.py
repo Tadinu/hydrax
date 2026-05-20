@@ -14,7 +14,7 @@ from hydrax import BackendType
 from hydrax.alg_base import SamplingBasedController
 
 # mjmanip
-from mjmanip.robot.arm_hand import ArmHandDiffIK
+from mjmanip.robot.arm_hand_diffik import ArmHandDiffIK
 
 """
 Utilities for asynchronous simulation, with the simulator and controller running
